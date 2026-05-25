@@ -1,0 +1,28 @@
+<div class="appa-activity-tab">
+  <h2>Activity</h2>
+  <ul id="appa-activity-list" class="appa-activity-list"></ul>
+</div>
+<style>
+  .appa-activity-tab { padding: 1rem; }
+  .appa-activity-list { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap: 0.4rem; }
+  .appa-activity-list li { background:#222; border:1px solid #333; padding:0.6rem 0.8rem; border-radius:4px; display:flex; justify-content:space-between; }
+  .appa-activity-list .meta { font-size: 0.8rem; opacity: 0.6; }
+</style>
+<script type="module">
+  const root = document.currentScript.parentElement;
+  const list = root.querySelector("#appa-activity-list");
+  async function refresh() {
+    const { sessions } = await fetch("/api/activity").then((r) => r.json());
+    list.innerHTML = "";
+    for (const s of sessions) {
+      const li = document.createElement("li");
+      li.innerHTML = `<span class="name"></span><span class="meta"></span>`;
+      li.querySelector(".name").textContent = s.name;
+      li.querySelector(".meta").textContent =
+        (s.participantIds || []).join(", ") + " · " + (s.lastUsedAt || "");
+      list.appendChild(li);
+    }
+  }
+  refresh();
+  setInterval(refresh, 15000);
+</script>

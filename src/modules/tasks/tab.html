@@ -1,0 +1,55 @@
+<div class="appa-tasks-tab">
+  <header class="appa-tasks-header">
+    <h2>Task Board</h2>
+    <button type="button" id="appa-tasks-add">+ Add task</button>
+  </header>
+  <div class="appa-tasks-columns" data-columns>
+    <section data-column="backlog"><h3>Backlog</h3><ol data-column-list="backlog"></ol></section>
+    <section data-column="active"><h3>Active</h3><ol data-column-list="active"></ol></section>
+    <section data-column="testing"><h3>Testing</h3><ol data-column-list="testing"></ol></section>
+    <section data-column="done"><h3>Done</h3><ol data-column-list="done"></ol></section>
+  </div>
+</div>
+<style>
+  .appa-tasks-tab { padding: 1rem; }
+  .appa-tasks-header { display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem; }
+  .appa-tasks-columns { display:grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+  .appa-tasks-columns section { background:#1118; border:1px solid #2227; border-radius:6px; padding:0.5rem; min-height: 200px; }
+  .appa-tasks-columns h3 { margin: 0.25rem 0 0.5rem; font-size: 0.9rem; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.05em; }
+  .appa-tasks-columns ol { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap: 0.4rem; }
+  .appa-tasks-columns li { background:#222; border:1px solid #333; padding:0.5rem; border-radius:4px; }
+  .appa-tasks-columns li .meta { font-size: 0.75rem; opacity: 0.6; margin-top: 0.3rem; }
+</style>
+<script type="module">
+  const root = document.currentScript.parentElement;
+  async function refresh() {
+    const data = await fetch("/api/tasks").then((r) => r.json());
+    const lists = root.querySelectorAll("[data-column-list]");
+    lists.forEach((ol) => (ol.innerHTML = ""));
+    for (const t of data.tasks ?? []) {
+      const ol = root.querySelector(`[data-column-list="${t.column}"]`);
+      if (!ol) continue;
+      const li = document.createElement("li");
+      li.innerHTML = `<div class="title"></div><div class="meta"></div>`;
+      li.querySelector(".title").textContent = t.title;
+      li.querySelector(".meta").textContent = [
+        t.assignee && `@${t.assignee}`,
+        t.due && `due ${t.due}`,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      ol.appendChild(li);
+    }
+  }
+  root.querySelector("#appa-tasks-add").addEventListener("click", async () => {
+    const title = prompt("Task title?");
+    if (!title) return;
+    await fetch("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    });
+    refresh();
+  });
+  refresh();
+</script>

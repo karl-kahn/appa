@@ -1,0 +1,7 @@
+{
+  "members": [
+    { "id": "coach", "name": "Demo Coach", "role": "coach" },
+    { "id": "student1", "name": "Demo Student 1", "role": "member" },
+    { "id": "student2", "name": "Demo Student 2", "role": "member" }
+  ]
+}

@@ -1,0 +1,34 @@
+# __APPA_PROJECT_NAME__
+
+An Appa instance. Generic chat-with-tutor-plus-team-workspace, customized for this project.
+
+## Run
+
+```bash
+cp .env.example .env  # set ANTHROPIC_API_KEY
+npm install
+npm start
+```
+
+Then open <http://127.0.0.1:3848>.
+
+## Files
+
+- `appa.config.js` — which modules to load and runtime settings
+- `team.json` — your roster (coaches + members)
+- `tutor-prompt.md` — the tutor persona (edit this to fit your domain)
+- `shared-memory.md` — knowledge the tutor sees in every session
+
+Data files are created lazily as modules are used (`tasks.json`, `photos.json`, `transcripts/`, etc.).
+
+## Adding a module
+
+Create `modules/my-module.js` exporting an [AppaModule](https://github.com/karl-kahn/appa#modules), then import it in `appa.config.js`:
+
+```js
+import myModule from "./modules/my-module.js";
+// ...
+export default defineConfig({
+  modules: [tasks, photos, activity, myModule],
+});
+```

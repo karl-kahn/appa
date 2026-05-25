@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Appa</title>
+  <link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+  <header class="appa-shell-header">
+    <div class="appa-title">Appa</div>
+    <div class="appa-user" id="appa-user-picker">
+      <label for="appa-user-select">Signed in as</label>
+      <select id="appa-user-select"></select>
+    </div>
+  </header>
+  <nav class="appa-tabs" id="appa-tabs"></nav>
+  <main class="appa-main">
+    <section class="appa-tab-content" id="appa-tab-chat">
+      <div class="appa-chat">
+        <div class="appa-chat-log" id="appa-chat-log"></div>
+        <form class="appa-chat-form" id="appa-chat-form">
+          <textarea id="appa-chat-input" rows="2" placeholder="Ask your tutor..."></textarea>
+          <button type="submit">Send</button>
+        </form>
+      </div>
+    </section>
+    <section class="appa-tab-content" id="appa-tab-host" hidden></section>
+  </main>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
