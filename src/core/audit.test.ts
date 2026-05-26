@@ -16,7 +16,12 @@ describe("AuditLog", () => {
   it("writes one JSON line per entry with a timestamp", async () => {
     const log = createAuditLog(dir);
     await log.append({ by: "alice", action: "task.create", target: "1" });
-    await log.append({ by: "coach", action: "task.delete", target: "1", details: { reason: "duplicate" } });
+    await log.append({
+      by: "coach",
+      action: "task.delete",
+      target: "1",
+      details: { reason: "duplicate" },
+    });
 
     const raw = await readFile(log.path(), "utf8");
     const lines = raw.trim().split("\n");

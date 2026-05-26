@@ -19,9 +19,7 @@ async function main(): Promise<void> {
   // clear error. /angel finding F33 (User Important).
   const probe = spawnSync("claude", ["--version"], { stdio: "ignore" });
   if (probe.status !== 0) {
-    console.error(
-      "appa: `claude` CLI not found on PATH (or `claude --version` exited non-zero).",
-    );
+    console.error("appa: `claude` CLI not found on PATH (or `claude --version` exited non-zero).");
     console.error(
       "      Install from https://docs.claude.com/claude-code/getting-started and try again.",
     );

@@ -128,9 +128,7 @@ const mod: AppaModule = {
         return;
       }
       await storage.update<PhotoRecord[]>(KEY, [], (cur) =>
-        cur.map((p) =>
-          p.filename === parsed.data.filename ? { ...p, alt: parsed.data.alt } : p,
-        ),
+        cur.map((p) => (p.filename === parsed.data.filename ? { ...p, alt: parsed.data.alt } : p)),
       );
       res.json({ ok: true });
     });
