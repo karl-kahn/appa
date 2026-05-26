@@ -8,8 +8,8 @@ import {
   type RateLimitState,
   canSpawn,
   createRateLimitState,
-  recordSpawn,
   snapshot as rateLimitSnapshot,
+  recordSpawn,
 } from "../core/rate-limit.js";
 import { type SessionStore, newClaudeSessionId, sanitizeSessionName } from "../core/session.js";
 import { spawnClaude } from "../core/spawn.js";
@@ -221,9 +221,7 @@ async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<
           // Stream only the visible portion. Cheap gate before the regex —
           // most chunks have no TOOL_CALL marker, so skip the lazy-dotall
           // scan when we can. (perf F29)
-          const visible = ev.text.includes("|||TOOL_CALL|||")
-            ? stripToolBlocks(ev.text)
-            : ev.text;
+          const visible = ev.text.includes("|||TOOL_CALL|||") ? stripToolBlocks(ev.text) : ev.text;
           if (visible) sse(res, "text", { text: visible, round });
         } else if (ev.type === "error") {
           sse(res, "error", { error: ev.error ?? "spawn error" });

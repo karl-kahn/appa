@@ -59,9 +59,7 @@ export function mountCoreRoutes(router: Router, deps: CoreRoutesDeps): void {
     const caller = await resolveOr403(req, res, { config });
     if (!caller) return;
     const all = await sessions.list();
-    const visible = caller.isCoach
-      ? all
-      : all.filter((s) => callerOwnsSession(caller, s));
+    const visible = caller.isCoach ? all : all.filter((s) => callerOwnsSession(caller, s));
     res.json({
       sessions: visible.map((s) => ({
         name: s.name,

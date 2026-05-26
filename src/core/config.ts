@@ -67,9 +67,7 @@ export function defineConfig<T extends AppaConfig>(c: T): T {
 }
 
 export interface ResolvedConfig
-  extends Required<
-    Omit<AppaConfig, "extraSystemPrompt" | "resolveCaller" | "onTranscriptAppend">
-  > {
+  extends Required<Omit<AppaConfig, "extraSystemPrompt" | "resolveCaller" | "onTranscriptAppend">> {
   extraSystemPrompt: string;
   resolveCaller: ResolveCaller | null;
   onTranscriptAppend: OnTranscriptAppend | null;

@@ -50,10 +50,7 @@ export interface SessionStoreOptions {
   persistDebounceMs?: number;
 }
 
-export function createSessionStore(
-  storage: Storage,
-  opts: SessionStoreOptions = {},
-): SessionStore {
+export function createSessionStore(storage: Storage, opts: SessionStoreOptions = {}): SessionStore {
   const debounceMs = opts.persistDebounceMs ?? 300;
   // Cache the in-memory state to avoid re-reading the JSON on every operation.
   // Persisted on every mutation so a process restart can recover.

@@ -75,7 +75,10 @@ export function buildArgs(options: SpawnOptions): string[] {
   }
   // Defense in depth: always emit the full default disallow list. Callers
   // can only ADD bans via extraDisallowedTools; they cannot remove any.
-  const disallowed = new Set([...DEFAULT_DISALLOWED_TOOLS, ...(options.extraDisallowedTools ?? [])]);
+  const disallowed = new Set([
+    ...DEFAULT_DISALLOWED_TOOLS,
+    ...(options.extraDisallowedTools ?? []),
+  ]);
   for (const tool of disallowed) {
     args.push("--disallowed-tools", tool);
   }
@@ -177,9 +180,7 @@ function mapStreamEvent(raw: unknown): SpawnEvent | null {
     for (const c of blocks) {
       if (c.type === "tool_use" || c.type === "tool_result") {
         console.error(
-          `appa/spawn: unexpected ${c.type} content block (tool name: ${c.name ?? "?"}). ` +
-            "Appa's protocol is text-embedded |||TOOL_CALL|||; native tool_use blocks indicate " +
-            "a tool slipped past the disallow list. This event will not be dispatched.",
+          `appa/spawn: unexpected ${c.type} content block (tool name: ${c.name ?? "?"}). Appa's protocol is text-embedded |||TOOL_CALL|||; native tool_use blocks indicate a tool slipped past the disallow list. This event will not be dispatched.`,
         );
       }
     }
