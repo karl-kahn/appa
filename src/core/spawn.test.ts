@@ -39,6 +39,29 @@ describe("buildArgs", () => {
     }
   });
 
+  it("extraDisallowedTools adds to defaults; cannot remove a default", () => {
+    const args = buildArgs({
+      message: "hi",
+      claudeSessionId: "x",
+      extraDisallowedTools: ["CustomTool(*)"],
+    });
+    expect(args).toContain("CustomTool(*)");
+    for (const tool of DEFAULT_DISALLOWED_TOOLS) {
+      expect(args).toContain(tool);
+    }
+  });
+
+  it("empty extra list does not remove default bans", () => {
+    const args = buildArgs({
+      message: "hi",
+      claudeSessionId: "x",
+      extraDisallowedTools: [],
+    });
+    for (const tool of DEFAULT_DISALLOWED_TOOLS) {
+      expect(args).toContain(tool);
+    }
+  });
+
   it("appends a system prompt fragment when provided", () => {
     const args = buildArgs({
       message: "hi",

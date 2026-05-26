@@ -11,7 +11,14 @@ export interface SpawnOptions {
   claudeSessionId: string;
   resume?: boolean;
   model?: string;
-  disallowedTools?: string[];
+  /**
+   * Additional tools to disallow, ADDED to `DEFAULT_DISALLOWED_TOOLS`.
+   * The defaults can never be removed via this knob — passing `[]`
+   * does NOT lift the default ban. The polarity is opt-in (add-more),
+   * not opt-out, to prevent a caller from accidentally re-enabling
+   * Bash/Write/Edit/etc. /angel finding F6 (Adversarial Critical).
+   */
+  extraDisallowedTools?: string[];
   signal?: AbortSignal;
   /** Optional override for the executable path (mainly for tests). */
   claudeBinary?: string;
@@ -66,7 +73,9 @@ export function buildArgs(options: SpawnOptions): string[] {
   if (options.systemPromptAppend && options.systemPromptAppend.trim().length > 0) {
     args.push("--append-system-prompt", options.systemPromptAppend);
   }
-  const disallowed = options.disallowedTools ?? DEFAULT_DISALLOWED_TOOLS;
+  // Defense in depth: always emit the full default disallow list. Callers
+  // can only ADD bans via extraDisallowedTools; they cannot remove any.
+  const disallowed = new Set([...DEFAULT_DISALLOWED_TOOLS, ...(options.extraDisallowedTools ?? [])]);
   for (const tool of disallowed) {
     args.push("--disallowed-tools", tool);
   }
