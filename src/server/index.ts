@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import express, { type Express, Router } from "express";
+import { createBus } from "../core/bus.js";
 import type { ResolvedConfig } from "../core/config.js";
 import { createMemoryStore } from "../core/memory.js";
 import { createSessionStore } from "../core/session.js";
@@ -39,6 +40,7 @@ export async function buildApp(config: ResolvedConfig): Promise<AppHandle> {
     config.onTranscriptAppend ? { onAppend: config.onTranscriptAppend } : {},
   );
 
+  const bus = createBus();
   const ctx: ModuleContext = {
     projectDir,
     storage,
@@ -46,6 +48,7 @@ export async function buildApp(config: ResolvedConfig): Promise<AppHandle> {
     memory,
     sessions,
     transcripts,
+    bus,
     async requireCaller(req, res) {
       return resolveOr403(req, res, { config });
     },

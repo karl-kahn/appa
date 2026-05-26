@@ -2,6 +2,7 @@
 // AppaModule interface — the contract every module implements.
 
 import type { Request, Response, Router } from "express";
+import type { AppaBus } from "../core/bus.js";
 import type { MemoryStore } from "../core/memory.js";
 import type { SessionRecord, SessionStore } from "../core/session.js";
 import type { Storage } from "../core/storage.js";
@@ -22,6 +23,14 @@ export interface ModuleContext {
   sessions: SessionStore;
   /** Transcript reader/writer. Use this rather than constructing your own. */
   transcripts: TranscriptStore;
+  /**
+   * Cross-module event bus. Modules that need to react to events from
+   * other modules (e.g., "assignment created → add task to board")
+   * subscribe in `init()` and emit from their handlers. Topics are
+   * loose strings; convention is `{module}.{event}` (e.g.
+   * `tasks.created`, `chat.tool_dispatched`).
+   */
+  bus: AppaBus;
   /**
    * Resolve the caller for an Express request via the kernel's configured
    * resolver. On 403, the helper writes the status + body to `res` and

@@ -86,6 +86,15 @@ export function buildRegistry(
         attribution: `tutor:${call.caller.id}`,
         ctx,
       });
+      // Cross-module visibility: every successful tool invocation fires a
+      // generic "tool.invoked" event other modules can listen to. Specific
+      // events (e.g., "tasks.created") are the module author's call to emit.
+      await ctx.bus.emit("tool.invoked", {
+        name,
+        params: call.params,
+        result,
+        caller: call.caller,
+      });
       return { ok: true as const, result };
     } catch (err) {
       return {

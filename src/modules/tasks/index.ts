@@ -75,7 +75,9 @@ const mod: AppaModule = {
         };
         return [...cur, next];
       });
-      return created[created.length - 1];
+      const task = created[created.length - 1];
+      await ctx.bus.emit("tasks.created", task);
+      return task;
     },
     update_task: async ({ params, ctx }) => {
       const input = UpdateInput.parse(params);
@@ -90,7 +92,9 @@ const mod: AppaModule = {
       if (!found) {
         throw new Error(`update_task: no task with id ${JSON.stringify(input.id)}`);
       }
-      return list.find((t) => t.id === input.id);
+      const updated = list.find((t) => t.id === input.id);
+      await ctx.bus.emit("tasks.updated", updated);
+      return updated;
     },
     delete_task: async ({ params, ctx }) => {
       const input = DeleteInput.parse(params);
@@ -108,6 +112,7 @@ const mod: AppaModule = {
       if (!found) {
         throw new Error(`delete_task: no task with id ${JSON.stringify(input.id)}`);
       }
+      await ctx.bus.emit("tasks.deleted", { id: input.id });
       return { deleted: input.id, remaining: after.length };
     },
   },
