@@ -8,9 +8,9 @@ import express, { type Express, Router } from "express";
 import { createBus } from "../core/bus.js";
 import type { ResolvedConfig } from "../core/config.js";
 import { createMemoryStore } from "../core/memory.js";
-import { createSessionStore } from "../core/session.js";
 import { createStorage } from "../core/storage.js";
 import { createTeamReader } from "../core/team.js";
+import { createThreadStore } from "../core/thread.js";
 import { createTranscriptStore } from "../core/transcript.js";
 import { buildRegistry } from "../modules/registry.js";
 import type { ModuleContext } from "../modules/types.js";
@@ -32,7 +32,7 @@ export interface AppHandle {
 export async function buildApp(config: ResolvedConfig): Promise<AppHandle> {
   const projectDir = resolve(config.projectDir);
   const storage = createStorage(projectDir);
-  const sessions = createSessionStore(storage);
+  const threads = createThreadStore(storage);
   const team = createTeamReader(storage, config.teamPath);
   const memory = createMemoryStore(projectDir, config.sharedMemoryPath);
   const transcripts = createTranscriptStore(
@@ -46,7 +46,7 @@ export async function buildApp(config: ResolvedConfig): Promise<AppHandle> {
     storage,
     team,
     memory,
-    sessions,
+    threads,
     transcripts,
     bus,
     async requireCaller(req, res) {
@@ -88,13 +88,13 @@ export async function buildApp(config: ResolvedConfig): Promise<AppHandle> {
   mountCoreRoutes(apiRouter, {
     config,
     team,
-    sessions,
+    threads,
     transcripts,
     tabs: registry.tabs,
   });
   mountChat(apiRouter, {
     config,
-    sessions,
+    threads,
     transcripts,
     memory,
     team,

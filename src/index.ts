@@ -3,7 +3,7 @@
 
 export { defineConfig, resolveConfig } from "./core/config.js";
 export type { AppaConfig, ResolveCaller, ResolvedConfig } from "./core/config.js";
-export { devAuth, callerOwnsSession } from "./server/auth.js";
+export { devAuth, callerOwnsThread } from "./server/auth.js";
 export type {
   AppaModule,
   CallerIdentity,
@@ -30,8 +30,12 @@ export { createBus } from "./core/bus.js";
 export type { AppaBus, BusHandler } from "./core/bus.js";
 export { createTeamReader } from "./core/team.js";
 export type { TeamReader } from "./core/team.js";
-export { createSessionStore, sanitizeSessionName, newClaudeSessionId } from "./core/session.js";
-export type { SessionStore, SessionRecord } from "./core/session.js";
+export {
+  createThreadStore,
+  sanitizeThreadId,
+  newClaudeSessionId,
+} from "./core/thread.js";
+export type { ThreadStore, ThreadRecord, ThreadStoreOptions } from "./core/thread.js";
 export { createTranscriptStore } from "./core/transcript.js";
 export type {
   OnTranscriptAppend,

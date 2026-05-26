@@ -4,18 +4,19 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createBus } from "../../core/bus.js";
 import { createMemoryStore } from "../../core/memory.js";
-import { type SessionRecord, createSessionStore } from "../../core/session.js";
+import { type ThreadRecord, createThreadStore } from "../../core/thread.js";
 import { createStorage } from "../../core/storage.js";
 import { createTeamReader } from "../../core/team.js";
 import { createTranscriptStore } from "../../core/transcript.js";
 import type { ModuleContext } from "../types.js";
 import tasksModule, { type Task } from "./index.js";
 
-function fakeSession(): SessionRecord {
+function fakeThread(): ThreadRecord {
   return {
-    name: "alice",
+    id: "alice",
+    ownerId: "alice",
+    coParticipantIds: [],
     claudeSessionId: null,
-    participantIds: ["alice"],
     hasMessages: false,
     createdAt: "",
     lastUsedAt: "",
@@ -35,7 +36,7 @@ describe("tasks module", () => {
       storage,
       team: createTeamReader(storage),
       memory: createMemoryStore(dir),
-      sessions: createSessionStore(storage, { persistDebounceMs: 0 }),
+      threads: createThreadStore(storage, { persistDebounceMs: 0 }),
       transcripts: createTranscriptStore(dir),
       bus: createBus(),
       requireCaller: async () => null,
@@ -52,7 +53,7 @@ describe("tasks module", () => {
     return Promise.resolve(
       handler({
         params,
-        session: fakeSession(),
+        thread: fakeThread(),
         caller: { id: "alice", isCoach: false },
         attribution: "tutor:alice",
         ctx,

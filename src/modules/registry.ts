@@ -2,7 +2,7 @@
 // Wire modules: build the tool dispatch table, system prompt, and Express router.
 
 import type { Router } from "express";
-import type { SessionRecord } from "../core/session.js";
+import type { ThreadRecord } from "../core/thread.js";
 import { isAllowed } from "../core/tools.js";
 import type { AppaModule, CallerIdentity, ModuleContext, ToolHandler } from "./types.js";
 
@@ -22,7 +22,7 @@ export interface ModuleRegistry {
     name: string,
     call: {
       params: Record<string, unknown>;
-      session: SessionRecord;
+      thread: ThreadRecord;
       caller: CallerIdentity;
     },
   ): Promise<{ ok: true; result: unknown } | { ok: false; error: string }>;
@@ -66,7 +66,7 @@ export function buildRegistry(
     name: string,
     call: {
       params: Record<string, unknown>;
-      session: SessionRecord;
+      thread: ThreadRecord;
       caller: CallerIdentity;
     },
   ) {
@@ -81,7 +81,7 @@ export function buildRegistry(
     try {
       const result = await handler({
         params: call.params,
-        session: call.session,
+        thread: call.thread,
         caller: call.caller,
         attribution: `tutor:${call.caller.id}`,
         ctx,

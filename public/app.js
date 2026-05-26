@@ -134,7 +134,7 @@ async function send(message) {
   if (!message.trim()) return;
   appendMsg("user", message);
   const live = appendMsg("assistant", "");
-  const res = await fetch(`/api/chat/${encodeURIComponent(state.sessionName)}`, {
+  const res = await aFetch(`/api/chat/threads/${encodeURIComponent(state.sessionName)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, asUserId: state.currentUserId }),

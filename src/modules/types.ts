@@ -4,9 +4,9 @@
 import type { Request, Response, Router } from "express";
 import type { AppaBus } from "../core/bus.js";
 import type { MemoryStore } from "../core/memory.js";
-import type { SessionRecord, SessionStore } from "../core/session.js";
 import type { Storage } from "../core/storage.js";
 import type { TeamReader } from "../core/team.js";
+import type { ThreadRecord, ThreadStore } from "../core/thread.js";
 import type { TranscriptStore } from "../core/transcript.js";
 
 /** Context passed to tool handlers and route registration. Stable surface. */
@@ -19,8 +19,8 @@ export interface ModuleContext {
   team: TeamReader;
   /** Shared memory file. */
   memory: MemoryStore;
-  /** Session bookkeeping (use for read-only queries; mutations go through kernel). */
-  sessions: SessionStore;
+  /** Thread store (was: `sessions`). Holds persisted conversation contexts. */
+  threads: ThreadStore;
   /** Transcript reader/writer. Use this rather than constructing your own. */
   transcripts: TranscriptStore;
   /**
@@ -51,12 +51,12 @@ export interface CallerIdentity {
 /** Per-call context for a tutor tool invocation. */
 export interface ToolInvocation<P extends Record<string, unknown> = Record<string, unknown>> {
   params: P;
-  /** The session that invoked the tool. */
-  session: SessionRecord;
+  /** The thread the tool was invoked from. */
+  thread: ThreadRecord;
   /**
    * The caller behind this tool invocation. Modules MUST use this for any
-   * filter that depends on "whose data is this?" — never trust a session
-   * name or a body-supplied user id.
+   * filter that depends on "whose data is this?" — never trust the thread
+   * id or a body-supplied user id.
    */
   caller: CallerIdentity;
   /** Attribution string forced onto writes — "tutor:<callerId>". */

@@ -11,14 +11,18 @@ import {
   snapshot as rateLimitSnapshot,
   recordSpawn,
 } from "../core/rate-limit.js";
-import { type SessionStore, newClaudeSessionId, sanitizeSessionName } from "../core/session.js";
 import { spawnClaude } from "../core/spawn.js";
 import type { TeamReader } from "../core/team.js";
+import {
+  type ThreadStore,
+  callerOwnsThread,
+  newClaudeSessionId,
+  sanitizeThreadId,
+} from "../core/thread.js";
 import { parseToolCalls, stripToolBlocks } from "../core/tools.js";
 import type { TranscriptStore } from "../core/transcript.js";
 import type { ModuleRegistry } from "../modules/registry.js";
 import type { CallerIdentity } from "../modules/types.js";
-import { callerOwnsSession } from "./auth.js";
 
 /**
  * Per-caller rate-limit state. The kernel rate-limits per caller id,
@@ -33,7 +37,7 @@ export interface PerCallerRateState {
 
 export interface ChatDeps {
   config: ResolvedConfig;
-  sessions: SessionStore;
+  threads: ThreadStore;
   transcripts: TranscriptStore;
   memory: MemoryStore;
   team: TeamReader;
@@ -63,7 +67,10 @@ function getCallerRateState(state: PerCallerRateState, id: string): RateLimitSta
 }
 
 export function mountChat(router: Router, deps: ChatDeps): void {
-  router.post("/api/chat/:sessionName", (req, res) => {
+  // Threads URL: /api/chat/threads/:threadId. The threadId is a stable
+  // identifier (kid's name in the simple case, server-generated UUID
+  // for shared/pair threads). Identity comes from caller, not from this slug.
+  router.post("/api/chat/threads/:threadId", (req, res) => {
     handleChat(req, res, deps).catch((err) => {
       if (!res.headersSent) {
         res.status(500).json({ error: err instanceof Error ? err.message : "internal error" });
@@ -112,9 +119,9 @@ export async function resolveOr403(
 }
 
 async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<void> {
-  const { sessions, transcripts, memory, team, registry, rateState, config } = deps;
+  const { threads, transcripts, memory, team, registry, rateState, config } = deps;
 
-  const rawName = typeof req.params.sessionName === "string" ? req.params.sessionName : "";
+  const rawId = typeof req.params.threadId === "string" ? req.params.threadId : "";
   const body = (req.body ?? {}) as { message?: unknown };
   const message = typeof body.message === "string" ? body.message : "";
 
@@ -126,24 +133,26 @@ async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<
   const caller = await resolveOr403(req, res, deps);
   if (!caller) return;
 
-  let safeName: string;
+  let threadId: string;
   try {
-    safeName = sanitizeSessionName(rawName);
+    threadId = sanitizeThreadId(rawId);
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : "invalid session name" });
+    res.status(400).json({ error: err instanceof Error ? err.message : "invalid thread id" });
     return;
   }
 
-  // Ownership: existing session must be owned by caller (or coach);
-  // new session names must equal the caller's id (or caller is coach).
-  const existing = await sessions.get(safeName);
+  // Ownership: existing thread must include caller (or caller is coach).
+  // New thread: id must equal caller.id (default convention) OR caller is coach.
+  const existing = await threads.get(threadId);
   if (existing) {
-    if (!callerOwnsSession(caller, existing)) {
-      res.status(403).json({ error: "session is owned by another caller" });
+    if (!callerOwnsThread(caller, existing)) {
+      res.status(403).json({ error: "thread is owned by another participant" });
       return;
     }
-  } else if (!caller.isCoach && safeName !== caller.id) {
-    res.status(403).json({ error: "session name must equal caller id (or caller must be coach)" });
+  } else if (!caller.isCoach && threadId !== caller.id) {
+    res.status(403).json({
+      error: "thread id must equal caller id for non-coach callers (or caller must be coach)",
+    });
     return;
   }
 
@@ -163,17 +172,19 @@ async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<
   }
   rateState.byId.set(caller.id, recordSpawn(check.state));
 
-  // Session
-  const session = await sessions.getOrCreate(safeName);
-  if (!session.claudeSessionId) {
-    await sessions.setClaudeId(session.name, newClaudeSessionId());
+  // Thread: existing one if found above, else create with caller as owner.
+  const thread = existing ?? (await threads.getOrCreate(threadId, { ownerId: caller.id }));
+  if (!thread.claudeSessionId) {
+    await threads.setClaudeId(thread.id, newClaudeSessionId());
   }
-  await sessions.setParticipants(session.name, [
-    ...new Set([...session.participantIds, caller.id]),
-  ]);
-  const refreshed = (await sessions.get(session.name)) ?? session;
+  // If the caller is in-coach-or-other capacity and not yet a participant,
+  // record them so future ownership checks pass without re-deriving coach.
+  if (caller.id !== thread.ownerId && !thread.coParticipantIds.includes(caller.id)) {
+    await threads.addCoParticipant(thread.id, caller.id);
+  }
+  const refreshed = (await threads.get(thread.id)) ?? thread;
   if (!refreshed.claudeSessionId) {
-    throw new Error("session: claudeSessionId was not set after setClaudeId");
+    throw new Error("thread: claudeSessionId was not set after setClaudeId");
   }
   const claudeId = refreshed.claudeSessionId;
   const resumeFromStart = refreshed.hasMessages;
@@ -182,18 +193,18 @@ async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<
   const persona = deps.persona;
   const memoryText = await memory.read();
   const member = await team.findById(caller.id);
-  const sessionBlock = `[Session: ${session.name} (${member?.role ?? "member"})]\nParticipants: ${member?.name ?? caller.id}\n`;
+  const threadBlock = `[Thread: ${thread.id} (owner: ${refreshed.ownerId}; caller: ${member?.name ?? caller.id} as ${member?.role ?? "member"})]\n`;
   const systemPrompt = [
     persona,
     registry.promptFragment,
     memoryText,
-    sessionBlock,
+    threadBlock,
     config.extraSystemPrompt,
   ]
     .filter((s) => s && s.trim().length > 0)
     .join("\n\n");
 
-  await transcripts.append(session.name, {
+  await transcripts.append(thread.id, {
     at: new Date().toISOString(),
     role: "user",
     text: message,
@@ -218,10 +229,9 @@ async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<
       })) {
         if (ev.type === "text" && ev.text) {
           roundText += ev.text;
-          // Stream only the visible portion. Cheap gate before the regex —
-          // most chunks have no TOOL_CALL marker, so skip the lazy-dotall
-          // scan when we can. (perf F29)
-          const visible = ev.text.includes("|||TOOL_CALL|||") ? stripToolBlocks(ev.text) : ev.text;
+          const visible = ev.text.includes("|||TOOL_CALL|||")
+            ? stripToolBlocks(ev.text)
+            : ev.text;
           if (visible) sse(res, "text", { text: visible, round });
         } else if (ev.type === "error") {
           sse(res, "error", { error: ev.error ?? "spawn error" });
@@ -237,14 +247,14 @@ async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<
       return;
     }
 
-    await sessions.markHasMessages(session.name);
+    await threads.markHasMessages(thread.id);
 
     const calls = parseToolCalls(roundText);
     assembledText += stripToolBlocks(roundText);
 
     if (calls.length === 0) break;
 
-    const sessionRecord = (await sessions.get(session.name)) ?? refreshed;
+    const threadRecord = (await threads.get(thread.id)) ?? refreshed;
     const results: Array<Record<string, unknown>> = [];
     for (const parsed of calls) {
       if (!parsed.call) {
@@ -253,17 +263,17 @@ async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<
       }
       const r = await registry.invoke(parsed.call.tool, {
         params: parsed.call.params,
-        session: sessionRecord,
+        thread: threadRecord,
         caller,
       });
       if (r.ok) {
-        await sessions.recordMutation(session.name, {
+        await threads.recordMutation(thread.id, {
           tool: parsed.call.tool,
           params: parsed.call.params,
-          sessionName: session.name,
+          sessionName: thread.id,
           at: new Date().toISOString(),
         });
-        await transcripts.append(session.name, {
+        await transcripts.append(thread.id, {
           at: new Date().toISOString(),
           role: "tool",
           toolCall: parsed.call,
@@ -272,7 +282,7 @@ async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<
         results.push({ tool: parsed.call.tool, result: r.result });
         sse(res, "tool", { tool: parsed.call.tool, ok: true, result: r.result });
       } else {
-        await transcripts.append(session.name, {
+        await transcripts.append(thread.id, {
           at: new Date().toISOString(),
           role: "tool",
           toolCall: parsed.call,
@@ -286,7 +296,7 @@ async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<
   }
 
   if (assembledText.trim().length > 0) {
-    await transcripts.append(session.name, {
+    await transcripts.append(thread.id, {
       at: new Date().toISOString(),
       role: "assistant",
       text: assembledText,

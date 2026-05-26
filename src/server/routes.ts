@@ -1,16 +1,15 @@
 // pattern: imperative-shell
 import type { Request, Response, Router } from "express";
 import type { ResolvedConfig } from "../core/config.js";
-import type { SessionStore } from "../core/session.js";
 import type { TeamReader } from "../core/team.js";
+import { type ThreadStore, callerOwnsThread } from "../core/thread.js";
 import type { TranscriptStore } from "../core/transcript.js";
-import { callerOwnsSession } from "./auth.js";
 import { resolveOr403 } from "./chat.js";
 
 export interface CoreRoutesDeps {
   config: ResolvedConfig;
   team: TeamReader;
-  sessions: SessionStore;
+  threads: ThreadStore;
   transcripts: TranscriptStore;
   tabs: Array<{
     moduleName: string;
@@ -19,16 +18,21 @@ export interface CoreRoutesDeps {
 }
 
 export function mountCoreRoutes(router: Router, deps: CoreRoutesDeps): void {
-  const { config, team, sessions, transcripts, tabs } = deps;
+  const { config, team, threads, transcripts, tabs } = deps;
 
-  // /api/team: roster lookup for authenticated callers. Only id, name,
-  // role exposed — extra fields (email, phone, etc.) stay private.
+  // /api/team: roster lookup for authenticated callers. Only id, name, role
+  // and groupId exposed — extra fields (email, phone, etc.) stay private.
   router.get("/api/team", async (req, res) => {
     const caller = await resolveOr403(req, res, { config });
     if (!caller) return;
     const members = await team.list();
     res.json({
-      members: members.map((m) => ({ id: m.id, name: m.name, role: m.role })),
+      members: members.map((m) => ({
+        id: m.id,
+        name: m.name,
+        role: m.role,
+        ...(m.groupId !== undefined ? { groupId: m.groupId } : {}),
+      })),
     });
   });
 
@@ -54,63 +58,63 @@ export function mountCoreRoutes(router: Router, deps: CoreRoutesDeps): void {
     });
   });
 
-  // /api/sessions: list. Non-coaches see only sessions they participate in.
-  router.get("/api/sessions", async (req, res) => {
+  // /api/threads: list. Non-coaches see only threads they participate in.
+  router.get("/api/threads", async (req, res) => {
     const caller = await resolveOr403(req, res, { config });
     if (!caller) return;
-    const all = await sessions.list();
-    const visible = caller.isCoach ? all : all.filter((s) => callerOwnsSession(caller, s));
+    const all = await threads.list();
+    const visible = caller.isCoach ? all : all.filter((t) => callerOwnsThread(caller, t));
     res.json({
-      sessions: visible.map((s) => ({
-        name: s.name,
-        participantIds: s.participantIds,
-        hasMessages: s.hasMessages,
-        lastUsedAt: s.lastUsedAt,
+      threads: visible.map((t) => ({
+        id: t.id,
+        ownerId: t.ownerId,
+        coParticipantIds: t.coParticipantIds,
+        title: t.title,
+        hasMessages: t.hasMessages,
+        lastUsedAt: t.lastUsedAt,
       })),
     });
   });
 
-  router.get("/api/session/:name", async (req, res) => {
+  router.get("/api/threads/:id", async (req, res) => {
     const caller = await resolveOr403(req, res, { config });
     if (!caller) return;
-    const name = typeof req.params.name === "string" ? req.params.name : "";
-    const s = await sessions.get(name);
-    if (!s) {
+    const id = typeof req.params.id === "string" ? req.params.id : "";
+    const t = await threads.get(id);
+    if (!t) {
       res.status(404).json({ error: "not found" });
       return;
     }
-    if (!callerOwnsSession(caller, s)) {
-      res.status(403).json({ error: "not your session" });
+    if (!callerOwnsThread(caller, t)) {
+      res.status(403).json({ error: "not your thread" });
       return;
     }
-    res.json(s);
+    res.json(t);
   });
 
-  router.post("/api/session/:name/end", async (req, res) => {
+  router.post("/api/threads/:id/end", async (req, res) => {
     const caller = await resolveOr403(req, res, { config });
     if (!caller) return;
-    const name = typeof req.params.name === "string" ? req.params.name : "";
-    const s = await sessions.get(name);
-    if (s && !callerOwnsSession(caller, s)) {
-      res.status(403).json({ error: "not your session" });
+    const id = typeof req.params.id === "string" ? req.params.id : "";
+    const t = await threads.get(id);
+    if (t && !callerOwnsThread(caller, t)) {
+      res.status(403).json({ error: "not your thread" });
       return;
     }
-    await sessions.end(name);
-    res.json({ ended: name });
+    await threads.end(id);
+    res.json({ ended: id });
   });
 
-  router.post("/api/session/:name/rollback", async (req, res) => {
+  router.post("/api/threads/:id/rollback", async (req, res) => {
     const caller = await resolveOr403(req, res, { config });
     if (!caller) return;
-    const name = typeof req.params.name === "string" ? req.params.name : "";
-    const s = await sessions.get(name);
-    if (s && !callerOwnsSession(caller, s)) {
-      res.status(403).json({ error: "not your session" });
+    const id = typeof req.params.id === "string" ? req.params.id : "";
+    const t = await threads.get(id);
+    if (t && !callerOwnsThread(caller, t)) {
+      res.status(403).json({ error: "not your thread" });
       return;
     }
-    const muts = await sessions.takeMutations(name);
-    // The kernel cannot actually undo tool effects — modules must record undo data
-    // and the kernel exposes mutations so callers can compensate. Future hook.
+    const muts = await threads.takeMutations(id);
     res.json({ rolledBack: muts.length, mutations: muts });
   });
 
@@ -123,20 +127,28 @@ export function mountCoreRoutes(router: Router, deps: CoreRoutesDeps): void {
       res.json({ transcripts: all });
       return;
     }
-    // For non-coaches, restrict to transcripts whose name is the caller's id.
-    res.json({ transcripts: all.filter((t) => t.name === caller.id) });
+    // For non-coaches: a transcript is visible if its corresponding thread
+    // is callerOwnsThread, or (fallback) the transcript name equals the
+    // caller's id (handles threads that ended/were cleared from memory).
+    const visible: typeof all = [];
+    for (const entry of all) {
+      const t = await threads.get(entry.name);
+      if (t) {
+        if (callerOwnsThread(caller, t)) visible.push(entry);
+      } else if (entry.name === caller.id) {
+        visible.push(entry);
+      }
+    }
+    res.json({ transcripts: visible });
   });
 
   router.get("/api/transcripts/:name", async (req: Request, res: Response) => {
     const caller = await resolveOr403(req, res, { config });
     if (!caller) return;
     const name = typeof req.params.name === "string" ? req.params.name : "";
-    const s = await sessions.get(name);
-    // If the session record exists, use full ownership check; else fall back
-    // to "name must equal caller id" (transcript may exist without an
-    // in-memory session for completed runs).
-    if (s) {
-      if (!callerOwnsSession(caller, s)) {
+    const t = await threads.get(name);
+    if (t) {
+      if (!callerOwnsThread(caller, t)) {
         res.status(403).json({ error: "not your transcript" });
         return;
       }

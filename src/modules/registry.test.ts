@@ -4,18 +4,19 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createBus } from "../core/bus.js";
 import { createMemoryStore } from "../core/memory.js";
-import { type SessionRecord, createSessionStore } from "../core/session.js";
+import { type ThreadRecord, createThreadStore } from "../core/thread.js";
 import { createStorage } from "../core/storage.js";
 import { createTeamReader } from "../core/team.js";
 import { createTranscriptStore } from "../core/transcript.js";
 import { buildRegistry } from "./registry.js";
 import type { AppaModule, CallerIdentity, ModuleContext } from "./types.js";
 
-function fakeSession(name = "alice"): SessionRecord {
+function fakeThread(id = "alice", ownerId = id): ThreadRecord {
   return {
-    name,
+    id,
+    ownerId,
+    coParticipantIds: [],
     claudeSessionId: null,
-    participantIds: [],
     hasMessages: false,
     createdAt: "",
     lastUsedAt: "",
@@ -39,7 +40,7 @@ describe("buildRegistry", () => {
       storage,
       team: createTeamReader(storage),
       memory: createMemoryStore(dir),
-      sessions: createSessionStore(storage, { persistDebounceMs: 0 }),
+      threads: createThreadStore(storage, { persistDebounceMs: 0 }),
       transcripts: createTranscriptStore(dir),
       bus: createBus(),
       requireCaller: async () => null,
@@ -67,7 +68,7 @@ describe("buildRegistry", () => {
     expect(() => buildRegistry([a, b], ctx)).toThrow(/re-declares tool foo/);
   });
 
-  it("invokes a tool with attribution based on caller id (not session name)", async () => {
+  it("invokes a tool with attribution based on caller id (not thread id)", async () => {
     let seen: { attribution: string; callerId: string } | null = null;
     const mod: AppaModule = {
       name: "demo",
@@ -81,9 +82,9 @@ describe("buildRegistry", () => {
     const reg = buildRegistry([mod], ctx);
     const r = await reg.invoke("log_thing", {
       params: {},
-      // The session name is unrelated to the caller — attribution should
-      // follow the caller, not the session slug.
-      session: fakeSession("shared-room"),
+      // The thread id and its owner are unrelated to the caller — attribution
+      // follows the caller, not the thread.
+      thread: fakeThread("shared-room", "bob"),
       caller: caller("alice"),
     });
     expect(r).toEqual({ ok: true, result: "ok" });
@@ -94,7 +95,7 @@ describe("buildRegistry", () => {
     const reg = buildRegistry([{ name: "empty" }], ctx);
     const r = await reg.invoke("ghost", {
       params: {},
-      session: fakeSession(),
+      thread: fakeThread(),
       caller: caller("alice", true),
     });
     expect(r).toEqual({ ok: false, error: expect.stringMatching(/not in allowlist/) });
@@ -109,13 +110,13 @@ describe("buildRegistry", () => {
     const reg = buildRegistry([mod], ctx);
     const blocked = await reg.invoke("nuke", {
       params: {},
-      session: fakeSession(),
+      thread: fakeThread(),
       caller: caller("alice", false),
     });
     expect(blocked.ok).toBe(false);
     const allowed = await reg.invoke("nuke", {
       params: {},
-      session: fakeSession(),
+      thread: fakeThread(),
       caller: caller("karl", true),
     });
     expect(allowed.ok).toBe(true);
@@ -133,7 +134,7 @@ describe("buildRegistry", () => {
     const reg = buildRegistry([mod], ctx);
     const r = await reg.invoke("bork", {
       params: {},
-      session: fakeSession(),
+      thread: fakeThread(),
       caller: caller("alice"),
     });
     expect(r).toEqual({ ok: false, error: "nope" });
