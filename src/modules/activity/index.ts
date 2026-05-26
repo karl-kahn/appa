@@ -1,7 +1,6 @@
 // pattern: imperative-shell
 // Read-only view of chat sessions + transcripts.
 
-import { createTranscriptStore } from "../../core/transcript.js";
 import type { AppaModule } from "../types.js";
 
 const promptFragment = `
@@ -28,8 +27,7 @@ const mod: AppaModule = {
       const name = typeof params.name === "string" ? params.name : "";
       const limit = typeof params.limit === "number" ? params.limit : 50;
       if (!name) return { error: "name required" };
-      const ts = createTranscriptStore(ctx.projectDir);
-      const entries = await ts.read(name, Math.min(limit, 200));
+      const entries = await ctx.transcripts.read(name, Math.min(limit, 200));
       return { entries };
     },
   },

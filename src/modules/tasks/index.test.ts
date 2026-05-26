@@ -6,6 +6,7 @@ import { createMemoryStore } from "../../core/memory.js";
 import { type SessionRecord, createSessionStore } from "../../core/session.js";
 import { createStorage } from "../../core/storage.js";
 import { createTeamReader } from "../../core/team.js";
+import { createTranscriptStore } from "../../core/transcript.js";
 import type { ModuleContext } from "../types.js";
 import tasksModule, { type Task } from "./index.js";
 
@@ -33,7 +34,8 @@ describe("tasks module", () => {
       storage,
       team: createTeamReader(storage),
       memory: createMemoryStore(dir),
-      sessions: createSessionStore(storage),
+      sessions: createSessionStore(storage, { persistDebounceMs: 0 }),
+      transcripts: createTranscriptStore(dir),
     };
   });
 

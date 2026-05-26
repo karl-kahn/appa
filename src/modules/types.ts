@@ -6,6 +6,7 @@ import type { MemoryStore } from "../core/memory.js";
 import type { SessionRecord, SessionStore } from "../core/session.js";
 import type { Storage } from "../core/storage.js";
 import type { TeamReader } from "../core/team.js";
+import type { TranscriptStore } from "../core/transcript.js";
 
 /** Context passed to tool handlers and route registration. Stable surface. */
 export interface ModuleContext {
@@ -19,6 +20,8 @@ export interface ModuleContext {
   memory: MemoryStore;
   /** Session bookkeeping (use for read-only queries; mutations go through kernel). */
   sessions: SessionStore;
+  /** Transcript reader/writer. Use this rather than constructing your own. */
+  transcripts: TranscriptStore;
 }
 
 /** Per-call context for a tutor tool invocation. */

@@ -32,7 +32,7 @@ export async function buildApp(config: ResolvedConfig): Promise<AppHandle> {
   const memory = createMemoryStore(projectDir, config.sharedMemoryPath);
   const transcripts = createTranscriptStore(projectDir);
 
-  const ctx: ModuleContext = { projectDir, storage, team, memory, sessions };
+  const ctx: ModuleContext = { projectDir, storage, team, memory, sessions, transcripts };
   const registry = buildRegistry(config.modules, ctx, config.extraSystemPrompt);
   await registry.init();
 
