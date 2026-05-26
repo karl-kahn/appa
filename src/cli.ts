@@ -33,11 +33,10 @@ async function main(): Promise<void> {
 
   const config = resolveConfig({
     ...mod.default,
-    ...(envProjectDir ? { projectDir: envProjectDir } : {}),
+    projectDir: envProjectDir ?? mod.default.projectDir ?? process.cwd(),
     ...(envPort && Number.isFinite(envPort) ? { port: envPort } : {}),
     ...(envHost ? { host: envHost } : {}),
     ...(envModel ? { model: envModel } : {}),
-    projectDir: envProjectDir ?? mod.default.projectDir ?? process.cwd(),
   });
 
   if (!process.env.ANTHROPIC_API_KEY) {

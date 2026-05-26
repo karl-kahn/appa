@@ -4,7 +4,12 @@
 import type { Request, Response, Router } from "express";
 import type { ResolvedConfig } from "../core/config.js";
 import type { MemoryStore } from "../core/memory.js";
-import { type RateLimitState, canSpawn, recordSpawn } from "../core/rate-limit.js";
+import {
+  type RateLimitState,
+  canSpawn,
+  recordSpawn,
+  snapshot as rateLimitSnapshot,
+} from "../core/rate-limit.js";
 import { type SessionStore, newClaudeSessionId } from "../core/session.js";
 import { spawnClaude } from "../core/spawn.js";
 import type { TeamReader } from "../core/team.js";
@@ -47,13 +52,7 @@ export function mountChat(router: Router, deps: ChatDeps): void {
   });
 
   router.get("/api/usage", (_req, res) => {
-    const s = deps.rateState.current;
-    res.json({
-      hourly: s.timestamps.filter((t) => t >= Date.now() - 60 * 60 * 1000).length,
-      daily: s.timestamps.length,
-      hourlyLimit: s.hourlyLimit,
-      dailyLimit: s.dailyLimit,
-    });
+    res.json(rateLimitSnapshot(deps.rateState.current));
   });
 }
 
@@ -102,7 +101,12 @@ async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<
     ...new Set([...session.participantIds, caller.id]),
   ]);
   const refreshed = (await sessions.get(session.name)) ?? session;
-  const claudeId = refreshed.claudeSessionId ?? newClaudeSessionId();
+  // setClaudeId above guarantees claudeSessionId is set by this point;
+  // the assertion is the contract, not a fallback.
+  if (!refreshed.claudeSessionId) {
+    throw new Error("session: claudeSessionId was not set after setClaudeId");
+  }
+  const claudeId = refreshed.claudeSessionId;
   const resumeFromStart = refreshed.hasMessages;
 
   // Build system prompt (persona cached at boot; memory + team cached in their stores)

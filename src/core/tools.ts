@@ -42,7 +42,7 @@ export function parseToolCalls(text: string): ParsedBlock[] {
   return out;
 }
 
-/** Strip the text *before* the first TOOL_CALL block. Useful when streaming assistant text. */
+/** Remove all TOOL_CALL blocks from text, leaving any surrounding prose intact. */
 export function stripToolBlocks(text: string): string {
   return text.replace(BLOCK_RE, "");
 }

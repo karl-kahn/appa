@@ -27,8 +27,12 @@ export interface AppaConfig {
   extraSystemPrompt?: string;
 }
 
-/** Identity helper — gives type inference + future schema migration hook. */
-export function defineConfig(c: AppaConfig): AppaConfig {
+/**
+ * Identity helper that preserves the caller's literal type — so module
+ * names and other inferable details survive into the returned value
+ * (Vite/Vitest pattern). Also a future hook for schema migration.
+ */
+export function defineConfig<T extends AppaConfig>(c: T): T {
   return c;
 }
 
