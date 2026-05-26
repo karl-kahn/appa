@@ -1,5 +1,11 @@
 // pattern: imperative-shell
 // Per-session .jsonl transcript files. Append-only; reads parse line-by-line.
+//
+// Hooks: a deployment can pass `onAppend` to be notified of every entry
+// the kernel writes — that's the wiring point for content-safety
+// alerting, audit logging, and live moderation surfaces. The hook is
+// best-effort: errors are caught and logged so a broken alerting path
+// doesn't break the chat. /angel finding F7 (Blindspot Critical).
 
 import { createReadStream } from "node:fs";
 import { appendFile, mkdir, readdir, stat } from "node:fs/promises";
@@ -15,13 +21,32 @@ function validateName(name: string): void {
   }
 }
 
+export type OnTranscriptAppend = (
+  sessionName: string,
+  entry: TranscriptEntry,
+) => void | Promise<void>;
+
+export interface TranscriptStoreOptions {
+  /** Subdirectory under projectDir. Default "transcripts". */
+  dir?: string;
+  /** Called after every successful append. Errors are logged + swallowed. */
+  onAppend?: OnTranscriptAppend;
+}
+
 export interface TranscriptStore {
   append(sessionName: string, entry: TranscriptEntry): Promise<void>;
   read(sessionName: string, limit?: number): Promise<TranscriptEntry[]>;
   list(): Promise<{ name: string; size: number; mtime: string }[]>;
 }
 
-export function createTranscriptStore(projectDir: string, dir = "transcripts"): TranscriptStore {
+export function createTranscriptStore(
+  projectDir: string,
+  opts: TranscriptStoreOptions | string = {},
+): TranscriptStore {
+  // Accept either an options object or a legacy `dir` string.
+  const options: TranscriptStoreOptions = typeof opts === "string" ? { dir: opts } : opts;
+  const dir = options.dir ?? "transcripts";
+  const onAppend = options.onAppend;
   const root = join(projectDir, dir);
   let rootReady: Promise<void> | null = null;
 
@@ -40,6 +65,16 @@ export function createTranscriptStore(projectDir: string, dir = "transcripts"): 
       await ensureRoot();
       const line = `${JSON.stringify(entry)}\n`;
       await appendFile(pathFor(sessionName), line, "utf8");
+      if (onAppend) {
+        try {
+          await onAppend(sessionName, entry);
+        } catch (err) {
+          console.error(
+            "appa/transcript: onAppend hook threw — entry was persisted, hook failed:",
+            err,
+          );
+        }
+      }
     },
 
     async read(sessionName, limit) {

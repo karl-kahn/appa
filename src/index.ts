@@ -31,7 +31,11 @@ export type { TeamReader } from "./core/team.js";
 export { createSessionStore, sanitizeSessionName, newClaudeSessionId } from "./core/session.js";
 export type { SessionStore, SessionRecord } from "./core/session.js";
 export { createTranscriptStore } from "./core/transcript.js";
-export type { TranscriptStore } from "./core/transcript.js";
+export type {
+  OnTranscriptAppend,
+  TranscriptStore,
+  TranscriptStoreOptions,
+} from "./core/transcript.js";
 export { createMemoryStore } from "./core/memory.js";
 export type { MemoryStore } from "./core/memory.js";
 export { parseToolCalls, stripToolBlocks, isAllowed } from "./core/tools.js";

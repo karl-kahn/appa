@@ -34,7 +34,10 @@ export async function buildApp(config: ResolvedConfig): Promise<AppHandle> {
   const sessions = createSessionStore(storage);
   const team = createTeamReader(storage, config.teamPath);
   const memory = createMemoryStore(projectDir, config.sharedMemoryPath);
-  const transcripts = createTranscriptStore(projectDir);
+  const transcripts = createTranscriptStore(
+    projectDir,
+    config.onTranscriptAppend ? { onAppend: config.onTranscriptAppend } : {},
+  );
 
   const ctx: ModuleContext = {
     projectDir,

@@ -7,6 +7,13 @@ export interface TeamMember {
   name: string;
   role: Role;
   email?: string;
+  /**
+   * Optional section / cohort / period id. Lets a single Appa deployment
+   * support a teacher with multiple class periods (or any multi-tenant
+   * grouping) without spinning up N separate processes. Modules and
+   * tools can filter by group via TeamReader.listInGroup.
+   */
+  groupId?: string;
   [extra: string]: unknown;
 }
 

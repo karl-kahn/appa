@@ -1,6 +1,7 @@
 // pattern: types-only
 import type { Request } from "express";
 import type { AppaModule, CallerIdentity } from "../modules/types.js";
+import type { OnTranscriptAppend } from "./transcript.js";
 
 /**
  * Identity resolver. The kernel calls this on every request that needs a
@@ -46,6 +47,14 @@ export interface AppaConfig {
    * real resolver against your proxy / SSO / signed-cookie layer.
    */
   resolveCaller?: ResolveCaller;
+  /**
+   * Called after every transcript entry the kernel writes. Use for
+   * content-safety alerting (classroom mandated-reporting), audit
+   * logging, or live moderation feeds. Errors are logged + swallowed —
+   * a broken alerting path won't break the chat. Best-effort hook;
+   * not an integrity gate.
+   */
+  onTranscriptAppend?: OnTranscriptAppend;
 }
 
 /**
@@ -58,9 +67,12 @@ export function defineConfig<T extends AppaConfig>(c: T): T {
 }
 
 export interface ResolvedConfig
-  extends Required<Omit<AppaConfig, "extraSystemPrompt" | "resolveCaller">> {
+  extends Required<
+    Omit<AppaConfig, "extraSystemPrompt" | "resolveCaller" | "onTranscriptAppend">
+  > {
   extraSystemPrompt: string;
   resolveCaller: ResolveCaller | null;
+  onTranscriptAppend: OnTranscriptAppend | null;
 }
 
 export function resolveConfig(c: AppaConfig): ResolvedConfig {
@@ -78,5 +90,6 @@ export function resolveConfig(c: AppaConfig): ResolvedConfig {
     modules: c.modules,
     extraSystemPrompt: c.extraSystemPrompt ?? "",
     resolveCaller: c.resolveCaller ?? null,
+    onTranscriptAppend: c.onTranscriptAppend ?? null,
   };
 }

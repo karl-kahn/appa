@@ -12,6 +12,8 @@ export interface TeamReader {
   findById(id: string): Promise<TeamMember | null>;
   hasRole(id: string, role: Role): Promise<boolean>;
   isCoach(id: string): Promise<boolean>;
+  /** Members belonging to a section/cohort. Members with no groupId are excluded. */
+  listInGroup(groupId: string): Promise<TeamMember[]>;
   /** Invalidate cache; next read hits disk. Call after roster edits. */
   refresh(): Promise<Team>;
 }
@@ -51,6 +53,9 @@ export function createTeamReader(storage: Storage, key = "team.json"): TeamReade
       const m = (await load()).members.find((x) => x.id === id);
       return !!m && m.role === "coach";
     },
+    async listInGroup(groupId) {
+      return (await load()).members.filter((m) => m.groupId === groupId);
+    },
     async refresh() {
       cache = null;
       return load();
@@ -68,9 +73,8 @@ function normalize(team: unknown): Team {
 function isMember(value: unknown): value is TeamMember {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
-  return (
-    typeof v.id === "string" &&
-    typeof v.name === "string" &&
-    (v.role === "coach" || v.role === "member")
-  );
+  if (typeof v.id !== "string" || typeof v.name !== "string") return false;
+  if (v.role !== "coach" && v.role !== "member") return false;
+  if (v.groupId !== undefined && typeof v.groupId !== "string") return false;
+  return true;
 }
