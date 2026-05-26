@@ -1,13 +1,5 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "entry": [
-    "src/index.ts",
-    "src/cli.ts",
-    "src/scaffold/create.ts",
-    "src/modules/tasks/index.ts",
-    "src/modules/photos/index.ts",
-    "src/modules/activity/index.ts"
-  ],
   "project": ["src/**/*.ts"],
   "ignoreExportsUsedInFile": true,
   "rules": {
