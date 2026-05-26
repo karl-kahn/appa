@@ -1,7 +1,8 @@
 // pattern: imperative-shell
 // Build an Express app from a resolved config + module registry.
 
-import { dirname, join, resolve } from "node:path";
+import { readFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import express, { type Express, Router } from "express";
 import type { ResolvedConfig } from "../core/config.js";
@@ -35,6 +36,18 @@ export async function buildApp(config: ResolvedConfig): Promise<AppHandle> {
   const registry = buildRegistry(config.modules, ctx, config.extraSystemPrompt);
   await registry.init();
 
+  // Pre-load the tutor persona once; the chat hot path uses this string
+  // directly instead of re-reading the file per request. Restart the server
+  // (or add a refresh endpoint) to pick up persona edits.
+  const personaPath = resolve(projectDir, config.tutorPromptPath);
+  let persona = "";
+  try {
+    persona = await readFile(personaPath, "utf8");
+  } catch (err) {
+    if ((err as { code?: string }).code !== "ENOENT") throw err;
+    console.warn(`appa: no tutor-prompt.md at ${personaPath} — sessions will have no persona`);
+  }
+
   const rateState = {
     current: createRateLimitState(config.hourlyLimit, config.dailyLimit),
   };
@@ -58,6 +71,7 @@ export async function buildApp(config: ResolvedConfig): Promise<AppHandle> {
     team,
     registry,
     rateState,
+    persona,
   });
   registry.registerRoutes(apiRouter);
   app.use(apiRouter);

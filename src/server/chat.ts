@@ -1,8 +1,6 @@
 // pattern: imperative-shell
 // The chat loop: validate, spawn, stream, dispatch tool calls, repeat.
 
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import type { Request, Response, Router } from "express";
 import type { ResolvedConfig } from "../core/config.js";
 import type { MemoryStore } from "../core/memory.js";
@@ -22,6 +20,12 @@ export interface ChatDeps {
   team: TeamReader;
   registry: ModuleRegistry;
   rateState: { current: RateLimitState };
+  /**
+   * Tutor persona text, loaded once at boot from `config.tutorPromptPath`.
+   * Cached on the deps object so the chat hot path doesn't re-read it
+   * per request — the file is stable across a server boot.
+   */
+  persona: string;
   /** A predicate so route layer can swap auth in. Default: must exist in team.json. */
   resolveCaller?(req: Request): Promise<{ id: string; isCoach: boolean } | null>;
 }
@@ -54,7 +58,7 @@ export function mountChat(router: Router, deps: ChatDeps): void {
 }
 
 async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<void> {
-  const { config, sessions, transcripts, memory, team, registry, rateState } = deps;
+  const { sessions, transcripts, memory, team, registry, rateState, config } = deps;
 
   const rawName = typeof req.params.sessionName === "string" ? req.params.sessionName : "";
   const body = (req.body ?? {}) as { message?: unknown; asUserId?: unknown };
@@ -101,8 +105,8 @@ async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<
   const claudeId = refreshed.claudeSessionId ?? newClaudeSessionId();
   const resumeFromStart = refreshed.hasMessages;
 
-  // Build system prompt
-  const persona = await safeRead(join(config.projectDir, config.tutorPromptPath));
+  // Build system prompt (persona cached at boot; memory + team cached in their stores)
+  const persona = deps.persona;
   const memoryText = await memory.read();
   const member = await team.findById(caller.id);
   const sessionBlock = `[Session: ${session.name} (${member?.role ?? "member"})]\nParticipants: ${member?.name ?? caller.id}\n`;
@@ -220,14 +224,6 @@ async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<
 
 function sse(res: Response, event: string, data: unknown): void {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-}
-
-async function safeRead(path: string): Promise<string> {
-  try {
-    return await readFile(path, "utf8");
-  } catch {
-    return "";
-  }
 }
 
 async function defaultResolveCaller(

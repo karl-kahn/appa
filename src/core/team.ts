@@ -1,4 +1,7 @@
-// pattern: functional-core (lookups) + imperative-shell (file IO via storage)
+// pattern: imperative-shell
+// TeamReader wraps storage with a single-process in-memory cache. Hot path
+// (chat.ts:resolveCaller, sessionBlock) reads team.json on every request; the
+// cache cuts disk reads from ~3/request to once per server boot + on team.refresh().
 import type { Storage } from "./storage.js";
 import type { Role, Team, TeamMember } from "./types.js";
 
@@ -9,12 +12,28 @@ export interface TeamReader {
   findById(id: string): Promise<TeamMember | null>;
   hasRole(id: string, role: Role): Promise<boolean>;
   isCoach(id: string): Promise<boolean>;
+  /** Invalidate cache; next read hits disk. Call after roster edits. */
+  refresh(): Promise<Team>;
 }
 
 export function createTeamReader(storage: Storage, key = "team.json"): TeamReader {
-  async function load(): Promise<Team> {
+  let cache: Team | null = null;
+  let inflight: Promise<Team> | null = null;
+
+  async function loadFresh(): Promise<Team> {
     const raw = await storage.read<Team>(key, EMPTY_TEAM);
     return normalize(raw);
+  }
+
+  async function load(): Promise<Team> {
+    if (cache) return cache;
+    if (inflight) return inflight;
+    inflight = loadFresh().then((t) => {
+      cache = t;
+      inflight = null;
+      return t;
+    });
+    return inflight;
   }
 
   return {
@@ -22,8 +41,7 @@ export function createTeamReader(storage: Storage, key = "team.json"): TeamReade
       return (await load()).members;
     },
     async findById(id) {
-      const team = await load();
-      return team.members.find((m) => m.id === id) ?? null;
+      return (await load()).members.find((m) => m.id === id) ?? null;
     },
     async hasRole(id, role) {
       const m = (await load()).members.find((x) => x.id === id);
@@ -32,6 +50,10 @@ export function createTeamReader(storage: Storage, key = "team.json"): TeamReade
     async isCoach(id) {
       const m = (await load()).members.find((x) => x.id === id);
       return !!m && m.role === "coach";
+    },
+    async refresh() {
+      cache = null;
+      return load();
     },
   };
 }
