@@ -37,7 +37,7 @@ describe("SessionStore", () => {
   });
 
   it("creates and retrieves a session", async () => {
-    const store = createSessionStore(createStorage(dir));
+    const store = createSessionStore(createStorage(dir), { persistDebounceMs: 0 });
     const s = await store.getOrCreate("alice");
     expect(s.name).toBe("alice");
     expect(s.claudeSessionId).toBeNull();
@@ -45,24 +45,24 @@ describe("SessionStore", () => {
   });
 
   it("returns the same object on getOrCreate twice", async () => {
-    const store = createSessionStore(createStorage(dir));
+    const store = createSessionStore(createStorage(dir), { persistDebounceMs: 0 });
     const a = await store.getOrCreate("alice");
     const b = await store.getOrCreate("alice");
     expect(a.createdAt).toBe(b.createdAt);
   });
 
   it("persists across stores backed by the same dir", async () => {
-    const s1 = createSessionStore(createStorage(dir));
+    const s1 = createSessionStore(createStorage(dir), { persistDebounceMs: 0 });
     await s1.getOrCreate("alice");
     await s1.markHasMessages("alice");
 
-    const s2 = createSessionStore(createStorage(dir));
+    const s2 = createSessionStore(createStorage(dir), { persistDebounceMs: 0 });
     const loaded = await s2.get("alice");
     expect(loaded?.hasMessages).toBe(true);
   });
 
   it("tracks tool mutations and clears them on take", async () => {
-    const store = createSessionStore(createStorage(dir));
+    const store = createSessionStore(createStorage(dir), { persistDebounceMs: 0 });
     await store.getOrCreate("alice");
     await store.recordMutation("alice", {
       tool: "create_task",
@@ -77,9 +77,22 @@ describe("SessionStore", () => {
   });
 
   it("ends a session, removing it from list", async () => {
-    const store = createSessionStore(createStorage(dir));
+    const store = createSessionStore(createStorage(dir), { persistDebounceMs: 0 });
     await store.getOrCreate("alice");
     await store.end("alice");
     expect(await store.get("alice")).toBeNull();
+  });
+
+  it("debounces writes; flush forces immediate persist", async () => {
+    const s1 = createSessionStore(createStorage(dir), { persistDebounceMs: 50 });
+    await s1.getOrCreate("alice");
+    await s1.markHasMessages("alice");
+    await s1.setParticipants("alice", ["alice"]);
+    await s1.flush();
+
+    const s2 = createSessionStore(createStorage(dir), { persistDebounceMs: 0 });
+    const loaded = await s2.get("alice");
+    expect(loaded?.hasMessages).toBe(true);
+    expect(loaded?.participantIds).toEqual(["alice"]);
   });
 });

@@ -35,12 +35,31 @@ export interface SessionStore {
   recordMutation(name: string, mutation: ToolMutation): Promise<void>;
   takeMutations(name: string): Promise<ToolMutation[]>;
   end(name: string): Promise<void>;
+  /** Flush any pending debounced persist to disk. Call on graceful shutdown. */
+  flush(): Promise<void>;
 }
 
-export function createSessionStore(storage: Storage): SessionStore {
+export interface SessionStoreOptions {
+  /**
+   * Trailing debounce on `.sessions.json` writes. The in-memory cache is the
+   * source of truth; the file is crash recovery. At classroom scale, every
+   * chat call mutates 3-4 session fields, so undebounced persistence becomes
+   * the dominant I/O cost. Default 300ms. Set to 0 to disable debouncing
+   * (writes synchronously on every mutation — useful for tests).
+   */
+  persistDebounceMs?: number;
+}
+
+export function createSessionStore(
+  storage: Storage,
+  opts: SessionStoreOptions = {},
+): SessionStore {
+  const debounceMs = opts.persistDebounceMs ?? 300;
   // Cache the in-memory state to avoid re-reading the JSON on every operation.
   // Persisted on every mutation so a process restart can recover.
   let cache: Map<string, SessionRecord> | null = null;
+  let pendingTimer: NodeJS.Timeout | null = null;
+  let pendingResolves: Array<() => void> = [];
 
   async function load(): Promise<Map<string, SessionRecord>> {
     if (cache) return cache;
@@ -49,9 +68,46 @@ export function createSessionStore(storage: Storage): SessionStore {
     return cache;
   }
 
+  async function writeNow(): Promise<void> {
+    if (!cache) return;
+    await storage.write<PersistedShape>(SESSIONS_KEY, { sessions: [...cache.values()] });
+  }
+
+  function schedulePersist(): Promise<void> {
+    if (debounceMs <= 0) return writeNow();
+    return new Promise<void>((resolve) => {
+      pendingResolves.push(resolve);
+      if (pendingTimer) return;
+      pendingTimer = setTimeout(() => {
+        const resolves = pendingResolves;
+        pendingResolves = [];
+        pendingTimer = null;
+        writeNow()
+          .then(() => {
+            for (const r of resolves) r();
+          })
+          .catch((err) => {
+            console.error("appa/session: persist failed", err);
+            for (const r of resolves) r();
+          });
+      }, debounceMs);
+    });
+  }
+
   async function persist(map: Map<string, SessionRecord>): Promise<void> {
     cache = map;
-    await storage.write<PersistedShape>(SESSIONS_KEY, { sessions: [...map.values()] });
+    await schedulePersist();
+  }
+
+  async function flush(): Promise<void> {
+    if (pendingTimer) {
+      clearTimeout(pendingTimer);
+      pendingTimer = null;
+      const resolves = pendingResolves;
+      pendingResolves = [];
+      await writeNow();
+      for (const r of resolves) r();
+    }
   }
 
   function blank(name: string): SessionRecord {
@@ -139,6 +195,7 @@ export function createSessionStore(storage: Storage): SessionStore {
       map.delete(safe);
       await persist(map);
     },
+    flush,
   };
 }
 
