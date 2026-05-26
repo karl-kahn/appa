@@ -232,15 +232,31 @@ async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<
           const visible = ev.text.includes("|||TOOL_CALL|||") ? stripToolBlocks(ev.text) : ev.text;
           if (visible) sse(res, "text", { text: visible, round });
         } else if (ev.type === "error") {
-          sse(res, "error", { error: ev.error ?? "spawn error" });
+          const msg = ev.error ?? "spawn error";
+          logChatError({
+            threadId: thread.id,
+            callerId: caller.id,
+            claudeSessionId: claudeId,
+            round,
+            phase: "stream",
+            error: msg,
+          });
+          sse(res, "error", { error: msg });
           res.end();
           return;
         }
       }
     } catch (err) {
-      sse(res, "error", {
-        error: err instanceof Error ? err.message : "spawn failed",
+      const msg = err instanceof Error ? err.message : "spawn failed";
+      logChatError({
+        threadId: thread.id,
+        callerId: caller.id,
+        claudeSessionId: claudeId,
+        round,
+        phase: "spawn",
+        error: msg,
       });
+      sse(res, "error", { error: msg });
       res.end();
       return;
     }
@@ -307,4 +323,33 @@ async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<
 
 function sse(res: Response, event: string, data: unknown): void {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
+/**
+ * Structured-log a spawn or chat-loop error to stderr. SSE drops the
+ * error to the client and the body is gone; without this the IT desk
+ * gets an "AI is broken" ticket with no way to look up what happened
+ * for which thread/caller. /angel finding F72 (Blindspot Minor).
+ *
+ * Single JSON line per event so vector/loki/cloudwatch can ingest
+ * without parsing prose. Stderr (not stdout) so it can't accidentally
+ * land in a sibling tool's stdout-pipe consumer.
+ */
+function logChatError(payload: {
+  threadId?: string;
+  callerId?: string;
+  claudeSessionId?: string | null;
+  round?: number;
+  phase: "spawn" | "loop" | "stream";
+  error: string;
+}): void {
+  console.error(
+    JSON.stringify({
+      ts: new Date().toISOString(),
+      level: "error",
+      source: "appa/chat",
+      ...payload,
+      errorTail: payload.error.length > 500 ? `${payload.error.slice(0, 500)}…` : payload.error,
+    }),
+  );
 }
