@@ -39,6 +39,26 @@ Open http://127.0.0.1:3848. The picker UI loads from `/api/bootstrap` (the only 
 
 **Once published**, the flow becomes the standard `npx create-appa my-classroom && cd my-classroom && npm install && npm start`.
 
+## Docker (one-command deploy)
+
+For schools/teachers without a sysadmin, a Dockerfile + compose recipe ships in the repo:
+
+```bash
+# 1. Scaffold a project directory
+mkdir project
+node /path/to/appa/dist/scaffold/create.js project
+
+# 2. API key
+echo "ANTHROPIC_API_KEY=sk-…" > .env
+
+# 3. Run
+docker compose up
+```
+
+The compose file mounts `./project/` into the container so transcripts, threads, audit log, and photos persist on the host. The Claude CLI is installed into the image at build time; no host-side `claude` install needed. Bound to `127.0.0.1` by default — front it with Tailscale Funnel or a reverse proxy to expose externally.
+
+Set `APPA_MODEL=haiku` for high-volume / lower-cost classroom use.
+
 ## Core concept: kernel + modules
 
 The **kernel** owns:
