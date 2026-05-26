@@ -32,6 +32,14 @@ export interface ModuleContext {
    */
   bus: AppaBus;
   /**
+   * Return a Storage scoped to a specific participant. All reads/writes
+   * land under `participants/<id>/<key>` in the project dir. Use this
+   * from route handlers after verifying the caller is allowed to access
+   * that participant's data (typically: caller.id === id or caller is
+   * a coach).
+   */
+  storageFor(participantId: string): Storage;
+  /**
    * Resolve the caller for an Express request via the kernel's configured
    * resolver. On 403, the helper writes the status + body to `res` and
    * returns null — the route handler should just early-return. Modules
@@ -59,6 +67,14 @@ export interface ToolInvocation<P extends Record<string, unknown> = Record<strin
    * id or a body-supplied user id.
    */
   caller: CallerIdentity;
+  /**
+   * Storage auto-scoped to the caller (`participants/<caller.id>/<key>`).
+   * Use this for private per-participant data so the storage layer
+   * enforces isolation instead of each tool remembering to filter by
+   * uploader id. The team-shared `ctx.storage` is still available for
+   * intentionally shared data (the kanban board, the photo gallery, etc.).
+   */
+  participantStorage: Storage;
   /** Attribution string forced onto writes — "tutor:<callerId>". */
   attribution: string;
   ctx: ModuleContext;

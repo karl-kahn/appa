@@ -8,7 +8,7 @@ import express, { type Express, Router } from "express";
 import { createBus } from "../core/bus.js";
 import type { ResolvedConfig } from "../core/config.js";
 import { createMemoryStore } from "../core/memory.js";
-import { createStorage } from "../core/storage.js";
+import { createScopedStorage, createStorage } from "../core/storage.js";
 import { createTeamReader } from "../core/team.js";
 import { createThreadStore } from "../core/thread.js";
 import { createTranscriptStore } from "../core/transcript.js";
@@ -49,6 +49,9 @@ export async function buildApp(config: ResolvedConfig): Promise<AppHandle> {
     threads,
     transcripts,
     bus,
+    storageFor(participantId) {
+      return createScopedStorage(storage, participantId);
+    },
     async requireCaller(req, res) {
       return resolveOr403(req, res, { config });
     },

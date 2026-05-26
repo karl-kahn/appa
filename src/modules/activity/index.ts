@@ -17,9 +17,7 @@ const mod: AppaModule = {
   tools: {
     get_activity: async ({ ctx, caller }) => {
       const all = await ctx.threads.list();
-      const visible = caller.isCoach
-        ? all
-        : all.filter((t) => callerOwnsThread(caller, t));
+      const visible = caller.isCoach ? all : all.filter((t) => callerOwnsThread(caller, t));
       return visible.map((t) => ({
         id: t.id,
         ownerId: t.ownerId,
@@ -48,9 +46,7 @@ const mod: AppaModule = {
       const caller = await ctx.requireCaller(req, res);
       if (!caller) return;
       const all = await ctx.threads.list();
-      const visible = caller.isCoach
-        ? all
-        : all.filter((t) => callerOwnsThread(caller, t));
+      const visible = caller.isCoach ? all : all.filter((t) => callerOwnsThread(caller, t));
       res.json({
         threads: visible.map((t) => ({
           id: t.id,

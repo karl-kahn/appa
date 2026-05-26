@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createBus } from "../../core/bus.js";
 import { createMemoryStore } from "../../core/memory.js";
+import { createScopedStorage } from "../../core/storage.js";
 import { type ThreadRecord, createThreadStore } from "../../core/thread.js";
 import { createStorage } from "../../core/storage.js";
 import { createTeamReader } from "../../core/team.js";
@@ -39,6 +40,7 @@ describe("tasks module", () => {
       threads: createThreadStore(storage, { persistDebounceMs: 0 }),
       transcripts: createTranscriptStore(dir),
       bus: createBus(),
+      storageFor: (id: string) => createScopedStorage(storage, id),
       requireCaller: async () => null,
     };
   });
@@ -55,6 +57,7 @@ describe("tasks module", () => {
         params,
         thread: fakeThread(),
         caller: { id: "alice", isCoach: false },
+        participantStorage: createScopedStorage(ctx.storage, "alice"),
         attribution: "tutor:alice",
         ctx,
       }) as T,

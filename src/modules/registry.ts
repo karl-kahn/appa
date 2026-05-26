@@ -2,6 +2,7 @@
 // Wire modules: build the tool dispatch table, system prompt, and Express router.
 
 import type { Router } from "express";
+import { createScopedStorage } from "../core/storage.js";
 import type { ThreadRecord } from "../core/thread.js";
 import { isAllowed } from "../core/tools.js";
 import type { AppaModule, CallerIdentity, ModuleContext, ToolHandler } from "./types.js";
@@ -83,6 +84,7 @@ export function buildRegistry(
         params: call.params,
         thread: call.thread,
         caller: call.caller,
+        participantStorage: createScopedStorage(ctx.storage, call.caller.id),
         attribution: `tutor:${call.caller.id}`,
         ctx,
       });

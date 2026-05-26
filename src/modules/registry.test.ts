@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createBus } from "../core/bus.js";
 import { createMemoryStore } from "../core/memory.js";
+import { createScopedStorage } from "../core/storage.js";
 import { type ThreadRecord, createThreadStore } from "../core/thread.js";
 import { createStorage } from "../core/storage.js";
 import { createTeamReader } from "../core/team.js";
@@ -43,6 +44,7 @@ describe("buildRegistry", () => {
       threads: createThreadStore(storage, { persistDebounceMs: 0 }),
       transcripts: createTranscriptStore(dir),
       bus: createBus(),
+      storageFor: (id: string) => createScopedStorage(storage, id),
       requireCaller: async () => null,
     };
   });
@@ -120,6 +122,37 @@ describe("buildRegistry", () => {
       caller: caller("karl", true),
     });
     expect(allowed.ok).toBe(true);
+  });
+
+  it("provides a participantStorage scoped to caller.id", async () => {
+    let seen: { key: string; storedAt: string } | null = null;
+    const mod: AppaModule = {
+      name: "scope-demo",
+      tools: {
+        write_private: async ({ participantStorage }) => {
+          await participantStorage.write("notes.json", { v: 1 });
+          seen = { key: "notes.json", storedAt: participantStorage.pathOf("notes.json") };
+          return "ok";
+        },
+      },
+    };
+    const reg = buildRegistry([mod], ctx);
+    const r = await reg.invoke("write_private", {
+      params: {},
+      thread: fakeThread(),
+      caller: caller("alice"),
+    });
+    expect(r.ok).toBe(true);
+    expect(seen?.storedAt).toContain("participants/alice/notes.json");
+    // The same key written via team-shared ctx.storage does NOT collide
+    // with the scoped write — different on-disk locations.
+    await ctx.storage.write("notes.json", { v: 2 });
+    const scoped = await ctx.storage.read<{ v: number }>("participants/alice/notes.json", {
+      v: -1,
+    });
+    const team = await ctx.storage.read<{ v: number }>("notes.json", { v: -1 });
+    expect(scoped.v).toBe(1);
+    expect(team.v).toBe(2);
   });
 
   it("catches thrown errors and reports them as failures", async () => {

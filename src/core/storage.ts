@@ -87,3 +87,29 @@ export function createStorage(projectDir: string): Storage {
 function isNotFound(err: unknown): boolean {
   return typeof err === "object" && err !== null && (err as { code?: string }).code === "ENOENT";
 }
+
+const SCOPE_SEGMENT = /^[\w.-]{1,128}$/;
+
+/**
+ * Wrap a Storage with an automatic key prefix so writes/reads land under
+ * a per-participant namespace. Used by the kernel to provide
+ * ToolInvocation.participantStorage and ModuleContext.storageFor(id) —
+ * the answer to the F11 finding (Thousand-Foot Critical): tools shouldn't
+ * have to remember to filter by uploader id; the storage should do it.
+ *
+ * Reading or writing any key on the scoped wrapper is equivalent to
+ * accessing `participants/<id>/<key>` on the underlying storage.
+ */
+export function createScopedStorage(base: Storage, scopeId: string): Storage {
+  if (!SCOPE_SEGMENT.test(scopeId)) {
+    throw new Error(`storage: invalid scope id ${JSON.stringify(scopeId)}`);
+  }
+  const prefix = `participants/${scopeId}/`;
+  const wrap = (key: string): string => `${prefix}${key}`;
+  return {
+    read: (key, fallback) => base.read(wrap(key), fallback),
+    write: (key, value) => base.write(wrap(key), value),
+    update: (key, fallback, fn) => base.update(wrap(key), fallback, fn),
+    pathOf: (key) => base.pathOf(wrap(key)),
+  };
+}

@@ -97,10 +97,7 @@ export interface ThreadStore {
   flush(): Promise<void>;
 }
 
-export function createThreadStore(
-  storage: Storage,
-  opts: ThreadStoreOptions = {},
-): ThreadStore {
+export function createThreadStore(storage: Storage, opts: ThreadStoreOptions = {}): ThreadStore {
   const debounceMs = opts.persistDebounceMs ?? 300;
   let cache: Map<string, ThreadRecord> | null = null;
   let pendingTimer: NodeJS.Timeout | null = null;

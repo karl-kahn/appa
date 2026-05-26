@@ -229,9 +229,7 @@ async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<
       })) {
         if (ev.type === "text" && ev.text) {
           roundText += ev.text;
-          const visible = ev.text.includes("|||TOOL_CALL|||")
-            ? stripToolBlocks(ev.text)
-            : ev.text;
+          const visible = ev.text.includes("|||TOOL_CALL|||") ? stripToolBlocks(ev.text) : ev.text;
           if (visible) sse(res, "text", { text: visible, round });
         } else if (ev.type === "error") {
           sse(res, "error", { error: ev.error ?? "spawn error" });
