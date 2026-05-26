@@ -68,6 +68,21 @@ body {
   color: var(--text);
   border-bottom-color: var(--accent);
 }
+.appa-tabs button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .appa-main { padding: 0; }
 .appa-tab-content { padding: 0; }
 .appa-chat {

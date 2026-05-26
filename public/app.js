@@ -70,8 +70,10 @@ function buildTabs() {
   for (const t of baseTabs) {
     const btn = document.createElement("button");
     btn.type = "button";
+    btn.role = "tab";
     btn.textContent = t.label;
     btn.dataset.tab = t.id;
+    btn.setAttribute("aria-selected", t.id === state.activeTab ? "true" : "false");
     if (t.id === state.activeTab) btn.classList.add("active");
     btn.addEventListener("click", () => selectTab(t.id, t.moduleName));
     nav.appendChild(btn);
@@ -81,7 +83,9 @@ function buildTabs() {
 async function selectTab(id, moduleName) {
   state.activeTab = id;
   document.querySelectorAll("#appa-tabs button").forEach((b) => {
-    b.classList.toggle("active", b.dataset.tab === id);
+    const isActive = b.dataset.tab === id;
+    b.classList.toggle("active", isActive);
+    b.setAttribute("aria-selected", isActive ? "true" : "false");
   });
   const chat = document.querySelector("#appa-tab-chat");
   const host = document.querySelector("#appa-tab-host");

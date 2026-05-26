@@ -14,18 +14,19 @@
       <select id="appa-user-select"></select>
     </div>
   </header>
-  <nav class="appa-tabs" id="appa-tabs"></nav>
+  <nav class="appa-tabs" id="appa-tabs" role="tablist" aria-label="App sections"></nav>
   <main class="appa-main">
-    <section class="appa-tab-content" id="appa-tab-chat">
+    <section class="appa-tab-content" id="appa-tab-chat" role="tabpanel" aria-label="Chat">
       <div class="appa-chat">
-        <div class="appa-chat-log" id="appa-chat-log"></div>
+        <div class="appa-chat-log" id="appa-chat-log" role="log" aria-live="polite" aria-label="Conversation transcript"></div>
         <form class="appa-chat-form" id="appa-chat-form">
-          <textarea id="appa-chat-input" rows="2" placeholder="Ask your tutor..."></textarea>
+          <label for="appa-chat-input" class="sr-only">Message</label>
+          <textarea id="appa-chat-input" rows="2" placeholder="Ask your tutor..." aria-label="Message to the tutor"></textarea>
           <button type="submit">Send</button>
         </form>
       </div>
     </section>
-    <section class="appa-tab-content" id="appa-tab-host" hidden></section>
+    <section class="appa-tab-content" id="appa-tab-host" role="tabpanel" hidden></section>
   </main>
   <script type="module" src="/app.js"></script>
 </body>

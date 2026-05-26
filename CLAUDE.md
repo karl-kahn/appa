@@ -21,6 +21,19 @@ Appa is the kernel productized out of `kidwind-worlds/server/`. The aim is a tin
 
    Pick the dominant pattern for the file. If you can't pick — split the file. Dual or hyphenated labels (`functional-core + imperative-shell (foo)`) are not valid; they're a signal the file needs to be split.
 
+## Accessibility floor
+
+Appa ships into school deployments by default. ADA / Section 504 / IDEA / WCAG 2.1 AA obligations attach as soon as the URL hits a district laptop. The kernel and shipped modules must meet a baseline:
+
+- **Color contrast**: muted/secondary text passes WCAG AA on the panel background. The CSS variable `--muted` is the only knob; pick a value that hits 4.5:1 against `--panel` in both color schemes.
+- **Color scheme**: respect `prefers-color-scheme: light` (don't force dark). Respect `prefers-reduced-motion` (no animations longer than 1ms when set).
+- **Images**: every `<img>` has an `alt` attribute. Photos uploaded via the photos module have an `alt` field at the schema level; the upload form prompts for it.
+- **Live regions**: streaming output (chat log) is in an `aria-live="polite"` region so screen readers announce new text. Tool-result events get visible role.
+- **Keyboard**: every interactive element is focusable; `:focus-visible` shows a 2px accent outline.
+- **Semantics**: tab nav is `role="tablist"`; tabs are `role="tab"` with `aria-selected`; tab panels are `role="tabpanel"`. Form inputs have labels (visible or `sr-only`).
+
+A new module's tab.html should follow the same conventions. If you can't easily hit them, that's the signal to push back on the design.
+
 ## Tech stack
 
 - TypeScript strict, ESM only, Node 20+

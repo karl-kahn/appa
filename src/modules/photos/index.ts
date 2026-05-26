@@ -14,6 +14,12 @@ interface PhotoRecord {
   uploaderName: string;
   uploadedAt: string;
   caption?: string;
+  /**
+   * Alt text for screen readers (WCAG 1.1.1 non-text content). Required
+   * field on the form, kept short — describes the image's content
+   * for blind users. /angel finding F40 (Blindspot Important).
+   */
+  alt?: string;
   size: number;
   mimeType: string;
 }
@@ -26,6 +32,11 @@ const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/gif", "image/web
 const Caption = z.object({
   filename: z.string(),
   caption: z.string().max(500),
+});
+
+const AltText = z.object({
+  filename: z.string(),
+  alt: z.string().max(300),
 });
 
 function buildUploader(projectDir: string): multer.Multer {
@@ -72,18 +83,56 @@ const mod: AppaModule = {
       const uploaderName = member?.name ?? caller.id;
       const files = (req.files as Express.Multer.File[] | undefined) ?? [];
 
-      const records: PhotoRecord[] = files.map((f) => ({
-        filename: f.filename,
-        originalName: f.originalname,
-        uploaderId: caller.id,
-        uploaderName,
-        uploadedAt: new Date().toISOString(),
-        size: f.size,
-        mimeType: f.mimetype,
-      }));
+      // Alt text may be supplied per-file (alt[0], alt[1], ...) or as a
+      // single value applied to all uploads. Defaults to filename — a
+      // weak fallback, but better than nothing and obvious-enough for
+      // a teacher to notice they should re-edit.
+      const altRaw = (req.body as { alt?: unknown }).alt;
+      const altValues: string[] = Array.isArray(altRaw)
+        ? altRaw.map((v) => (typeof v === "string" ? v : ""))
+        : typeof altRaw === "string"
+          ? files.map(() => altRaw)
+          : [];
+
+      const records: PhotoRecord[] = files.map((f, i) => {
+        const record: PhotoRecord = {
+          filename: f.filename,
+          originalName: f.originalname,
+          uploaderId: caller.id,
+          uploaderName,
+          uploadedAt: new Date().toISOString(),
+          size: f.size,
+          mimeType: f.mimetype,
+        };
+        const altValue = altValues[i] ?? f.originalname;
+        if (altValue) record.alt = altValue.slice(0, 300);
+        return record;
+      });
 
       await storage.update<PhotoRecord[]>(KEY, [], (cur) => [...records, ...cur]);
       res.json({ added: records.length, records });
+    });
+
+    router.post("/api/photos/alt", async (req, res) => {
+      const caller = await requireCaller(req, res);
+      if (!caller) return;
+      const parsed = AltText.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.message });
+        return;
+      }
+      const existing = await storage.read<PhotoRecord[]>(KEY, []);
+      const record = existing.find((p) => p.filename === parsed.data.filename);
+      if (record && !caller.isCoach && record.uploaderId !== caller.id) {
+        res.status(403).json({ error: "not your photo" });
+        return;
+      }
+      await storage.update<PhotoRecord[]>(KEY, [], (cur) =>
+        cur.map((p) =>
+          p.filename === parsed.data.filename ? { ...p, alt: parsed.data.alt } : p,
+        ),
+      );
+      res.json({ ok: true });
     });
 
     router.get("/api/photos", async (req, res) => {
