@@ -8,7 +8,7 @@ import { createStorage } from "../core/storage.js";
 import { createTeamReader } from "../core/team.js";
 import { createTranscriptStore } from "../core/transcript.js";
 import { buildRegistry } from "./registry.js";
-import type { AppaModule, ModuleContext } from "./types.js";
+import type { AppaModule, CallerIdentity, ModuleContext } from "./types.js";
 
 function fakeSession(name = "alice"): SessionRecord {
   return {
@@ -20,6 +20,10 @@ function fakeSession(name = "alice"): SessionRecord {
     lastUsedAt: "",
     toolMutations: [],
   };
+}
+
+function caller(id = "alice", isCoach = false): CallerIdentity {
+  return { id, isCoach };
 }
 
 describe("buildRegistry", () => {
@@ -36,6 +40,7 @@ describe("buildRegistry", () => {
       memory: createMemoryStore(dir),
       sessions: createSessionStore(storage, { persistDebounceMs: 0 }),
       transcripts: createTranscriptStore(dir),
+      requireCaller: async () => null,
     };
   });
 
@@ -60,13 +65,13 @@ describe("buildRegistry", () => {
     expect(() => buildRegistry([a, b], ctx)).toThrow(/re-declares tool foo/);
   });
 
-  it("invokes a tool with the right attribution", async () => {
-    let seen: string | null = null;
+  it("invokes a tool with attribution based on caller id (not session name)", async () => {
+    let seen: { attribution: string; callerId: string } | null = null;
     const mod: AppaModule = {
       name: "demo",
       tools: {
-        log_thing: async ({ attribution }) => {
-          seen = attribution;
+        log_thing: async ({ attribution, caller: c }) => {
+          seen = { attribution, callerId: c.id };
           return "ok";
         },
       },
@@ -74,11 +79,13 @@ describe("buildRegistry", () => {
     const reg = buildRegistry([mod], ctx);
     const r = await reg.invoke("log_thing", {
       params: {},
-      session: fakeSession("alice"),
-      isCoach: false,
+      // The session name is unrelated to the caller — attribution should
+      // follow the caller, not the session slug.
+      session: fakeSession("shared-room"),
+      caller: caller("alice"),
     });
     expect(r).toEqual({ ok: true, result: "ok" });
-    expect(seen).toBe("tutor:alice");
+    expect(seen).toEqual({ attribution: "tutor:alice", callerId: "alice" });
   });
 
   it("rejects unknown tools", async () => {
@@ -86,12 +93,12 @@ describe("buildRegistry", () => {
     const r = await reg.invoke("ghost", {
       params: {},
       session: fakeSession(),
-      isCoach: true,
+      caller: caller("alice", true),
     });
     expect(r).toEqual({ ok: false, error: expect.stringMatching(/not in allowlist/) });
   });
 
-  it("blocks coach-only tools for non-coach sessions", async () => {
+  it("blocks coach-only tools for non-coach callers", async () => {
     const mod: AppaModule = {
       name: "admin",
       tools: { nuke: () => "boom" },
@@ -101,13 +108,13 @@ describe("buildRegistry", () => {
     const blocked = await reg.invoke("nuke", {
       params: {},
       session: fakeSession(),
-      isCoach: false,
+      caller: caller("alice", false),
     });
     expect(blocked.ok).toBe(false);
     const allowed = await reg.invoke("nuke", {
       params: {},
       session: fakeSession(),
-      isCoach: true,
+      caller: caller("karl", true),
     });
     expect(allowed.ok).toBe(true);
   });
@@ -125,7 +132,7 @@ describe("buildRegistry", () => {
     const r = await reg.invoke("bork", {
       params: {},
       session: fakeSession(),
-      isCoach: false,
+      caller: caller("alice"),
     });
     expect(r).toEqual({ ok: false, error: "nope" });
   });

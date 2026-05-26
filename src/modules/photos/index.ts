@@ -62,22 +62,20 @@ const mod: AppaModule = {
   tools: {
     get_photos: async ({ ctx }) => ctx.storage.read<PhotoRecord[]>(KEY, []),
   },
-  routes: (router, { storage, team, projectDir }) => {
+  routes: (router, { storage, team, projectDir, requireCaller }) => {
     const uploader = buildUploader(projectDir);
 
     router.post("/api/photos/upload", uploader.array("photos", 10), async (req, res) => {
+      const caller = await requireCaller(req, res);
+      if (!caller) return;
+      const member = await team.findById(caller.id);
+      const uploaderName = member?.name ?? caller.id;
       const files = (req.files as Express.Multer.File[] | undefined) ?? [];
-      const uploaderId =
-        typeof (req.body as { uploaderId?: string }).uploaderId === "string"
-          ? (req.body as { uploaderId: string }).uploaderId
-          : "";
-      const member = uploaderId ? await team.findById(uploaderId) : null;
-      const uploaderName = member?.name ?? "unknown";
 
       const records: PhotoRecord[] = files.map((f) => ({
         filename: f.filename,
         originalName: f.originalname,
-        uploaderId: member?.id ?? "",
+        uploaderId: caller.id,
         uploaderName,
         uploadedAt: new Date().toISOString(),
         size: f.size,
@@ -88,11 +86,17 @@ const mod: AppaModule = {
       res.json({ added: records.length, records });
     });
 
-    router.get("/api/photos", async (_req, res) => {
+    router.get("/api/photos", async (req, res) => {
+      const caller = await requireCaller(req, res);
+      if (!caller) return;
       res.json({ photos: await storage.read<PhotoRecord[]>(KEY, []) });
     });
 
-    router.get("/api/photos/file/:filename", (req, res) => {
+    router.get("/api/photos/file/:filename", async (req, res) => {
+      // File serving still requires auth so photos aren't world-readable
+      // from a leaked URL. Filenames are sanitized at upload time.
+      const caller = await requireCaller(req, res);
+      if (!caller) return;
       const filename = typeof req.params.filename === "string" ? req.params.filename : "";
       if (!/^[\w.-]+$/.test(filename)) {
         res.status(400).json({ error: "bad filename" });
@@ -102,9 +106,18 @@ const mod: AppaModule = {
     });
 
     router.delete("/api/photos/:filename", async (req, res) => {
+      const caller = await requireCaller(req, res);
+      if (!caller) return;
       const filename = typeof req.params.filename === "string" ? req.params.filename : "";
       if (!/^[\w.-]+$/.test(filename)) {
         res.status(400).json({ error: "bad filename" });
+        return;
+      }
+      // Only the uploader or a coach can delete.
+      const existing = await storage.read<PhotoRecord[]>(KEY, []);
+      const record = existing.find((p) => p.filename === filename);
+      if (record && !caller.isCoach && record.uploaderId !== caller.id) {
+        res.status(403).json({ error: "not your photo" });
         return;
       }
       await storage.update<PhotoRecord[]>(KEY, [], (cur) =>
@@ -119,9 +132,18 @@ const mod: AppaModule = {
     });
 
     router.post("/api/photos/caption", async (req, res) => {
+      const caller = await requireCaller(req, res);
+      if (!caller) return;
       const parsed = Caption.safeParse(req.body);
       if (!parsed.success) {
         res.status(400).json({ error: parsed.error.message });
+        return;
+      }
+      // Only the uploader or a coach can caption.
+      const existing = await storage.read<PhotoRecord[]>(KEY, []);
+      const record = existing.find((p) => p.filename === parsed.data.filename);
+      if (record && !caller.isCoach && record.uploaderId !== caller.id) {
+        res.status(403).json({ error: "not your photo" });
         return;
       }
       await storage.update<PhotoRecord[]>(KEY, [], (cur) =>

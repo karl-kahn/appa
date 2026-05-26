@@ -8,10 +8,32 @@ const state = {
   sessionName: "",
 };
 
+// Wrap fetch so every request carries X-Appa-User. The dev-auth resolver
+// on the server reads this header (or the body field, for POSTs); a real
+// deployment swaps that resolver for one backed by a proxy/SSO.
+function aFetch(input, init = {}) {
+  const headers = new Headers(init.headers || {});
+  if (state.currentUserId) headers.set("X-Appa-User", state.currentUserId);
+  return fetch(input, { ...init, headers });
+}
+
 async function init() {
-  const teamResp = await fetch("/api/team").then((r) => r.json());
-  state.members = teamResp.members ?? [];
-  const tabsResp = await fetch("/api/tabs").then((r) => r.json());
+  // /api/bootstrap is the unauthenticated picker source — it ships
+  // id+name+role only so the UI can render before identity is set.
+  // Once a user is picked, all subsequent requests carry X-Appa-User.
+  const teamData = await fetch("/api/bootstrap").then((r) => r.json());
+  state.members = teamData.members ?? [];
+  const url = new URL(window.location.href);
+  const urlUser = url.searchParams.get("asUserId");
+  const initial = urlUser
+    ? state.members.find((m) => m.id === urlUser)
+    : state.members[0];
+  if (initial) {
+    state.currentUserId = initial.id;
+    state.sessionName = initial.id;
+    window.appaCurrentUserId = initial.id;
+  }
+  const tabsResp = await aFetch("/api/tabs").then((r) => r.json());
   state.tabs = tabsResp.tabs ?? [];
   buildUserPicker();
   buildTabs();

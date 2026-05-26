@@ -7,20 +7,24 @@ import { fileURLToPath } from "node:url";
 import express, { type Express, Router } from "express";
 import type { ResolvedConfig } from "../core/config.js";
 import { createMemoryStore } from "../core/memory.js";
-import { type RateLimitState, createRateLimitState } from "../core/rate-limit.js";
 import { createSessionStore } from "../core/session.js";
 import { createStorage } from "../core/storage.js";
 import { createTeamReader } from "../core/team.js";
 import { createTranscriptStore } from "../core/transcript.js";
 import { buildRegistry } from "../modules/registry.js";
 import type { ModuleContext } from "../modules/types.js";
-import { mountChat } from "./chat.js";
+import {
+  type PerCallerRateState,
+  createPerCallerRateState,
+  mountChat,
+  resolveOr403,
+} from "./chat.js";
 import { mountCoreRoutes } from "./routes.js";
 import { securityHeaders } from "./security.js";
 
 export interface AppHandle {
   app: Express;
-  rateState: { current: RateLimitState };
+  rateState: PerCallerRateState;
   ctx: ModuleContext;
 }
 
@@ -32,7 +36,17 @@ export async function buildApp(config: ResolvedConfig): Promise<AppHandle> {
   const memory = createMemoryStore(projectDir, config.sharedMemoryPath);
   const transcripts = createTranscriptStore(projectDir);
 
-  const ctx: ModuleContext = { projectDir, storage, team, memory, sessions, transcripts };
+  const ctx: ModuleContext = {
+    projectDir,
+    storage,
+    team,
+    memory,
+    sessions,
+    transcripts,
+    async requireCaller(req, res) {
+      return resolveOr403(req, res, { config });
+    },
+  };
   const registry = buildRegistry(config.modules, ctx, config.extraSystemPrompt);
   await registry.init();
 
@@ -48,16 +62,25 @@ export async function buildApp(config: ResolvedConfig): Promise<AppHandle> {
     console.warn(`appa: no tutor-prompt.md at ${personaPath} — sessions will have no persona`);
   }
 
-  const rateState = {
-    current: createRateLimitState(config.hourlyLimit, config.dailyLimit),
-  };
+  const rateState = createPerCallerRateState(config.hourlyLimit, config.dailyLimit);
+
+  if (!config.resolveCaller) {
+    console.warn(
+      "appa: no resolveCaller configured — the kernel will deny every request that " +
+        "needs a caller. Set config.resolveCaller (use devAuth() for local dev, or " +
+        "wire a real resolver against your proxy / SSO / signed-cookie layer).",
+    );
+  }
 
   const app = express();
   app.use(express.json({ limit: "1mb" }));
   app.use(securityHeaders);
+  // Expose readers on app.locals so middleware/helpers can reach them.
+  app.locals.team = team;
 
   const apiRouter = Router();
   mountCoreRoutes(apiRouter, {
+    config,
     team,
     sessions,
     transcripts,

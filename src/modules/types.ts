@@ -1,7 +1,7 @@
 // pattern: types-only
 // AppaModule interface — the contract every module implements.
 
-import type { Router } from "express";
+import type { Request, Response, Router } from "express";
 import type { MemoryStore } from "../core/memory.js";
 import type { SessionRecord, SessionStore } from "../core/session.js";
 import type { Storage } from "../core/storage.js";
@@ -22,6 +22,21 @@ export interface ModuleContext {
   sessions: SessionStore;
   /** Transcript reader/writer. Use this rather than constructing your own. */
   transcripts: TranscriptStore;
+  /**
+   * Resolve the caller for an Express request via the kernel's configured
+   * resolver. On 403, the helper writes the status + body to `res` and
+   * returns null — the route handler should just early-return. Modules
+   * MUST call this before any side effect or attribution-bearing read.
+   */
+  requireCaller(req: Request, res: Response): Promise<CallerIdentity | null>;
+}
+
+/** Identity of the request author, resolved by the kernel before any tool fires. */
+export interface CallerIdentity {
+  /** Stable id from team.json. */
+  id: string;
+  /** True if the team-roster role is "coach". */
+  isCoach: boolean;
 }
 
 /** Per-call context for a tutor tool invocation. */
@@ -29,7 +44,13 @@ export interface ToolInvocation<P extends Record<string, unknown> = Record<strin
   params: P;
   /** The session that invoked the tool. */
   session: SessionRecord;
-  /** Attribution string forced onto writes — "tutor:<sessionName>". */
+  /**
+   * The caller behind this tool invocation. Modules MUST use this for any
+   * filter that depends on "whose data is this?" — never trust a session
+   * name or a body-supplied user id.
+   */
+  caller: CallerIdentity;
+  /** Attribution string forced onto writes — "tutor:<callerId>". */
   attribution: string;
   ctx: ModuleContext;
 }

@@ -36,6 +36,7 @@ describe("tasks module", () => {
       memory: createMemoryStore(dir),
       sessions: createSessionStore(storage, { persistDebounceMs: 0 }),
       transcripts: createTranscriptStore(dir),
+      requireCaller: async () => null,
     };
   });
 
@@ -50,6 +51,7 @@ describe("tasks module", () => {
       handler({
         params,
         session: fakeSession(),
+        caller: { id: "alice", isCoach: false },
         attribution: "tutor:alice",
         ctx,
       }) as T,
@@ -65,6 +67,8 @@ describe("tasks module", () => {
     expect(t.id).toBe("1");
     expect(t.title).toBe("ship it");
     expect(t.column).toBe("backlog");
+    // Attribution string is whatever the test fixture passes in (the
+    // kernel produces `tutor:${caller.id}` in production).
     expect(t.createdBy).toBe("tutor:alice");
   });
 

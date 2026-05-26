@@ -4,7 +4,7 @@
 import type { Router } from "express";
 import type { SessionRecord } from "../core/session.js";
 import { isAllowed } from "../core/tools.js";
-import type { AppaModule, ModuleContext, ToolHandler } from "./types.js";
+import type { AppaModule, CallerIdentity, ModuleContext, ToolHandler } from "./types.js";
 
 export interface ModuleRegistry {
   /** All tool handlers, flattened. Tool name → handler. */
@@ -23,7 +23,7 @@ export interface ModuleRegistry {
     call: {
       params: Record<string, unknown>;
       session: SessionRecord;
-      isCoach: boolean;
+      caller: CallerIdentity;
     },
   ): Promise<{ ok: true; result: unknown } | { ok: false; error: string }>;
   /** Apply each module's `routes` to a router. */
@@ -67,13 +67,13 @@ export function buildRegistry(
     call: {
       params: Record<string, unknown>;
       session: SessionRecord;
-      isCoach: boolean;
+      caller: CallerIdentity;
     },
   ) {
     if (!isAllowed(name, allowlist)) {
       return { ok: false as const, error: `tool ${name} not in allowlist` };
     }
-    if (coachOnlyTools.has(name) && !call.isCoach) {
+    if (coachOnlyTools.has(name) && !call.caller.isCoach) {
       return { ok: false as const, error: `tool ${name} is coach-only` };
     }
     const handler = tools.get(name);
@@ -82,7 +82,8 @@ export function buildRegistry(
       const result = await handler({
         params: call.params,
         session: call.session,
-        attribution: `tutor:${call.session.name}`,
+        caller: call.caller,
+        attribution: `tutor:${call.caller.id}`,
         ctx,
       });
       return { ok: true as const, result };

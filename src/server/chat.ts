@@ -7,15 +7,29 @@ import type { MemoryStore } from "../core/memory.js";
 import {
   type RateLimitState,
   canSpawn,
+  createRateLimitState,
   recordSpawn,
   snapshot as rateLimitSnapshot,
 } from "../core/rate-limit.js";
-import { type SessionStore, newClaudeSessionId } from "../core/session.js";
+import { type SessionStore, newClaudeSessionId, sanitizeSessionName } from "../core/session.js";
 import { spawnClaude } from "../core/spawn.js";
 import type { TeamReader } from "../core/team.js";
 import { parseToolCalls, stripToolBlocks } from "../core/tools.js";
 import type { TranscriptStore } from "../core/transcript.js";
 import type { ModuleRegistry } from "../modules/registry.js";
+import type { CallerIdentity } from "../modules/types.js";
+import { callerOwnsSession } from "./auth.js";
+
+/**
+ * Per-caller rate-limit state. The kernel rate-limits per caller id,
+ * not globally, so one rogue student can't lock out the rest of the
+ * classroom. Keyed by `caller.id`; states are created lazily.
+ */
+export interface PerCallerRateState {
+  byId: Map<string, RateLimitState>;
+  hourlyLimit: number;
+  dailyLimit: number;
+}
 
 export interface ChatDeps {
   config: ResolvedConfig;
@@ -24,18 +38,29 @@ export interface ChatDeps {
   memory: MemoryStore;
   team: TeamReader;
   registry: ModuleRegistry;
-  rateState: { current: RateLimitState };
+  rateState: PerCallerRateState;
   /**
    * Tutor persona text, loaded once at boot from `config.tutorPromptPath`.
    * Cached on the deps object so the chat hot path doesn't re-read it
    * per request — the file is stable across a server boot.
    */
   persona: string;
-  /** A predicate so route layer can swap auth in. Default: must exist in team.json. */
-  resolveCaller?(req: Request): Promise<{ id: string; isCoach: boolean } | null>;
 }
 
 const MAX_MESSAGE = 5000;
+
+export function createPerCallerRateState(hourly: number, daily: number): PerCallerRateState {
+  return { byId: new Map(), hourlyLimit: hourly, dailyLimit: daily };
+}
+
+function getCallerRateState(state: PerCallerRateState, id: string): RateLimitState {
+  let st = state.byId.get(id);
+  if (!st) {
+    st = createRateLimitState(state.hourlyLimit, state.dailyLimit);
+    state.byId.set(id, st);
+  }
+  return st;
+}
 
 export function mountChat(router: Router, deps: ChatDeps): void {
   router.post("/api/chat/:sessionName", (req, res) => {
@@ -51,29 +76,74 @@ export function mountChat(router: Router, deps: ChatDeps): void {
     });
   });
 
-  router.get("/api/usage", (_req, res) => {
-    res.json(rateLimitSnapshot(deps.rateState.current));
+  router.get("/api/usage", async (req, res) => {
+    const caller = await resolveOr403(req, res, deps);
+    if (!caller) return;
+    const st = getCallerRateState(deps.rateState, caller.id);
+    res.json(rateLimitSnapshot(st));
   });
+}
+
+/**
+ * Look up the caller via the configured resolver. If no resolver is
+ * configured or it returns null, write a 403 to `res` and return null
+ * so the caller can early-return. Centralizes the auth gate.
+ */
+export async function resolveOr403(
+  req: Request,
+  res: Response,
+  deps: { config: ResolvedConfig },
+): Promise<CallerIdentity | null> {
+  const resolver = deps.config.resolveCaller;
+  if (!resolver) {
+    res.status(403).json({
+      error:
+        "appa: no resolveCaller configured. The kernel rejects requests by default; " +
+        "supply config.resolveCaller (or devAuth() for local development).",
+    });
+    return null;
+  }
+  const caller = await resolver(req);
+  if (!caller) {
+    res.status(403).json({ error: "unknown caller" });
+    return null;
+  }
+  return caller;
 }
 
 async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<void> {
   const { sessions, transcripts, memory, team, registry, rateState, config } = deps;
 
   const rawName = typeof req.params.sessionName === "string" ? req.params.sessionName : "";
-  const body = (req.body ?? {}) as { message?: unknown; asUserId?: unknown };
+  const body = (req.body ?? {}) as { message?: unknown };
   const message = typeof body.message === "string" ? body.message : "";
-  const asUserId = typeof body.asUserId === "string" ? body.asUserId : "";
 
   if (!message || message.length > MAX_MESSAGE) {
     res.status(400).json({ error: "invalid message length" });
     return;
   }
 
-  const caller = deps.resolveCaller
-    ? await deps.resolveCaller(req)
-    : await defaultResolveCaller(team, asUserId);
-  if (!caller) {
-    res.status(403).json({ error: "unknown caller" });
+  const caller = await resolveOr403(req, res, deps);
+  if (!caller) return;
+
+  let safeName: string;
+  try {
+    safeName = sanitizeSessionName(rawName);
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "invalid session name" });
+    return;
+  }
+
+  // Ownership: existing session must be owned by caller (or coach);
+  // new session names must equal the caller's id (or caller is coach).
+  const existing = await sessions.get(safeName);
+  if (existing) {
+    if (!callerOwnsSession(caller, existing)) {
+      res.status(403).json({ error: "session is owned by another caller" });
+      return;
+    }
+  } else if (!caller.isCoach && safeName !== caller.id) {
+    res.status(403).json({ error: "session name must equal caller id (or caller must be coach)" });
     return;
   }
 
@@ -83,17 +153,18 @@ async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<
   res.setHeader("Connection", "keep-alive");
   res.flushHeaders?.();
 
-  // Rate limit
-  const check = canSpawn(rateState.current);
+  // Per-caller rate limit
+  const callerState = getCallerRateState(rateState, caller.id);
+  const check = canSpawn(callerState);
   if (!check.ok) {
     sse(res, "error", { error: check.reason ?? "rate limited" });
     res.end();
     return;
   }
-  rateState.current = recordSpawn(check.state);
+  rateState.byId.set(caller.id, recordSpawn(check.state));
 
   // Session
-  const session = await sessions.getOrCreate(rawName);
+  const session = await sessions.getOrCreate(safeName);
   if (!session.claudeSessionId) {
     await sessions.setClaudeId(session.name, newClaudeSessionId());
   }
@@ -101,8 +172,6 @@ async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<
     ...new Set([...session.participantIds, caller.id]),
   ]);
   const refreshed = (await sessions.get(session.name)) ?? session;
-  // setClaudeId above guarantees claudeSessionId is set by this point;
-  // the assertion is the contract, not a fallback.
   if (!refreshed.claudeSessionId) {
     throw new Error("session: claudeSessionId was not set after setClaudeId");
   }
@@ -187,7 +256,7 @@ async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<
       const r = await registry.invoke(parsed.call.tool, {
         params: parsed.call.params,
         session: sessionRecord,
-        isCoach: caller.isCoach,
+        caller,
       });
       if (r.ok) {
         await sessions.recordMutation(session.name, {
@@ -232,14 +301,4 @@ async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<
 
 function sse(res: Response, event: string, data: unknown): void {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-}
-
-async function defaultResolveCaller(
-  team: TeamReader,
-  asUserId: string,
-): Promise<{ id: string; isCoach: boolean } | null> {
-  if (!asUserId) return null;
-  const m = await team.findById(asUserId);
-  if (!m) return null;
-  return { id: m.id, isCoach: m.role === "coach" };
 }

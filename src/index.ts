@@ -2,9 +2,11 @@
 // Main package entry — what consumers `import "appa"` for.
 
 export { defineConfig, resolveConfig } from "./core/config.js";
-export type { AppaConfig, ResolvedConfig } from "./core/config.js";
+export type { AppaConfig, ResolveCaller, ResolvedConfig } from "./core/config.js";
+export { devAuth, callerOwnsSession } from "./server/auth.js";
 export type {
   AppaModule,
+  CallerIdentity,
   ModuleContext,
   ToolHandler,
   ToolInvocation,

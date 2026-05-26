@@ -1,5 +1,19 @@
 // pattern: types-only
-import type { AppaModule } from "../modules/types.js";
+import type { Request } from "express";
+import type { AppaModule, CallerIdentity } from "../modules/types.js";
+
+/**
+ * Identity resolver. The kernel calls this on every request that needs a
+ * caller (chat, session-scoped routes, tool dispatch). Returning `null`
+ * rejects the request with 403. Deployments MUST supply one in any
+ * environment where the server is reachable by more than one user.
+ *
+ * The default (`null`) is deny-all — `appa` ships no identity guesser.
+ * For local development, use `devAuth()` from "appa" — it trusts a
+ * client-supplied `asUserId` body field and is intentionally not safe
+ * for any deployment.
+ */
+export type ResolveCaller = (req: Request) => Promise<CallerIdentity | null>;
 
 export interface AppaConfig {
   /** Where team.json, transcripts/, shared-memory.md live. Default: cwd. */
@@ -25,6 +39,13 @@ export interface AppaConfig {
   modules: AppaModule[];
   /** Extra system prompt appended after tutor-prompt.md and the module fragments. */
   extraSystemPrompt?: string;
+  /**
+   * Identity resolver — see `ResolveCaller` docs. If omitted, the kernel
+   * denies every request that needs a caller and prints a loud warning
+   * at server boot. Wire `devAuth()` for local development or write a
+   * real resolver against your proxy / SSO / signed-cookie layer.
+   */
+  resolveCaller?: ResolveCaller;
 }
 
 /**
@@ -36,8 +57,10 @@ export function defineConfig<T extends AppaConfig>(c: T): T {
   return c;
 }
 
-export interface ResolvedConfig extends Required<Omit<AppaConfig, "extraSystemPrompt">> {
+export interface ResolvedConfig
+  extends Required<Omit<AppaConfig, "extraSystemPrompt" | "resolveCaller">> {
   extraSystemPrompt: string;
+  resolveCaller: ResolveCaller | null;
 }
 
 export function resolveConfig(c: AppaConfig): ResolvedConfig {
@@ -54,5 +77,6 @@ export function resolveConfig(c: AppaConfig): ResolvedConfig {
     maxToolRounds: c.maxToolRounds ?? 3,
     modules: c.modules,
     extraSystemPrompt: c.extraSystemPrompt ?? "",
+    resolveCaller: c.resolveCaller ?? null,
   };
 }
