@@ -1,0 +1,24 @@
+# Run an Appa consumer project locally with one command.
+#
+# Setup:
+#   1. Put your consumer files (team.json, tutor-prompt.md,
+#      appa.config.js, shared-memory.md) in ./project/
+#   2. Set ANTHROPIC_API_KEY in your shell or a .env file at this level
+#   3. docker compose up
+#
+# Then open http://127.0.0.1:3848
+
+services:
+  appa:
+    build: .
+    image: appa:local
+    ports:
+      - "127.0.0.1:3848:3848"
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      # APPA_MODEL defaults to "sonnet". Switch to "haiku" for
+      # high-volume classrooms to save ~3x on inference cost.
+      APPA_MODEL: ${APPA_MODEL:-sonnet}
+    volumes:
+      - ./project:/project
+    restart: unless-stopped
