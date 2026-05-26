@@ -2,6 +2,7 @@
 // AppaModule interface — the contract every module implements.
 
 import type { Request, Response, Router } from "express";
+import type { AuditLog } from "../core/audit.js";
 import type { AppaBus } from "../core/bus.js";
 import type { MemoryStore } from "../core/memory.js";
 import type { Storage } from "../core/storage.js";
@@ -31,6 +32,12 @@ export interface ModuleContext {
    * `tasks.created`, `chat.tool_dispatched`).
    */
   bus: AppaBus;
+  /**
+   * Append-only audit log. Modules SHOULD call audit.append on any
+   * HTTP mutation that isn't already captured via a tool call (the
+   * kernel auto-audits tool.invoked). Useful for "who did X when".
+   */
+  audit: AuditLog;
   /**
    * Return a Storage scoped to a specific participant. All reads/writes
    * land under `participants/<id>/<key>` in the project dir. Use this

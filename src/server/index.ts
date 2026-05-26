@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import express, { type Express, Router } from "express";
+import { createAuditLog } from "../core/audit.js";
 import { createBus } from "../core/bus.js";
 import type { ResolvedConfig } from "../core/config.js";
 import { createMemoryStore } from "../core/memory.js";
@@ -41,6 +42,24 @@ export async function buildApp(config: ResolvedConfig): Promise<AppHandle> {
   );
 
   const bus = createBus();
+  const audit = createAuditLog(projectDir);
+
+  // Kernel auto-audits every successful tool invocation so modules
+  // don't have to remember. Module routes that mutate via HTTP (not
+  // via a tool) should call ctx.audit.append() directly.
+  bus.on("tool.invoked", async (payload) => {
+    const p = payload as {
+      name?: string;
+      caller?: { id?: string };
+      params?: unknown;
+    };
+    await audit.append({
+      by: `tutor:${p.caller?.id ?? "?"}`,
+      action: `tool.${p.name ?? "?"}`,
+      details: { params: p.params },
+    });
+  });
+
   const ctx: ModuleContext = {
     projectDir,
     storage,
@@ -49,6 +68,7 @@ export async function buildApp(config: ResolvedConfig): Promise<AppHandle> {
     threads,
     transcripts,
     bus,
+    audit,
     storageFor(participantId) {
       return createScopedStorage(storage, participantId);
     },
@@ -56,6 +76,22 @@ export async function buildApp(config: ResolvedConfig): Promise<AppHandle> {
       return resolveOr403(req, res, { config });
     },
   };
+
+  // Retention sweep on boot: delete transcripts older than the
+  // configured window. Idempotent — if no transcripts dir yet, no-op.
+  if (config.transcriptRetentionDays > 0) {
+    const cutoff = new Date(Date.now() - config.transcriptRetentionDays * 24 * 60 * 60 * 1000);
+    transcripts.pruneOlderThan(cutoff).then(
+      (removed) => {
+        if (removed.length > 0) {
+          console.log(
+            `appa: pruned ${removed.length} transcript(s) older than ${config.transcriptRetentionDays}d`,
+          );
+        }
+      },
+      (err) => console.error("appa: transcript retention sweep failed:", err),
+    );
+  }
   const registry = buildRegistry(config.modules, ctx, config.extraSystemPrompt);
   await registry.init();
 
@@ -93,6 +129,7 @@ export async function buildApp(config: ResolvedConfig): Promise<AppHandle> {
     team,
     threads,
     transcripts,
+    audit,
     tabs: registry.tabs,
   });
   mountChat(apiRouter, {

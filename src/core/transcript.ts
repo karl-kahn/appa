@@ -8,7 +8,7 @@
 // doesn't break the chat. /angel finding F7 (Blindspot Critical).
 
 import { createReadStream } from "node:fs";
-import { appendFile, mkdir, readdir, stat } from "node:fs/promises";
+import { appendFile, mkdir, readdir, stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import type { TranscriptEntry } from "./types.js";
@@ -37,6 +37,18 @@ export interface TranscriptStore {
   append(sessionName: string, entry: TranscriptEntry): Promise<void>;
   read(sessionName: string, limit?: number): Promise<TranscriptEntry[]>;
   list(): Promise<{ name: string; size: number; mtime: string }[]>;
+  /**
+   * Delete the transcript file for a specific thread. Idempotent —
+   * succeeds even if the file doesn't exist. FERPA/GDPR Article 17
+   * right-to-erasure path. /angel finding F38.
+   */
+  remove(sessionName: string): Promise<void>;
+  /**
+   * Delete transcript files older than `cutoff`. Returns the list of
+   * deleted thread names. Used by the retention sweeper at boot when
+   * `config.transcriptRetentionDays` is set.
+   */
+  pruneOlderThan(cutoff: Date): Promise<string[]>;
 }
 
 export function createTranscriptStore(
@@ -119,6 +131,32 @@ export function createTranscriptStore(
       } catch {
         return [];
       }
+    },
+
+    async remove(sessionName) {
+      try {
+        await unlink(pathFor(sessionName));
+      } catch (err) {
+        if ((err as { code?: string }).code !== "ENOENT") throw err;
+      }
+    },
+
+    async pruneOlderThan(cutoff) {
+      const removed: string[] = [];
+      try {
+        const names = await readdir(root);
+        for (const f of names) {
+          if (!f.endsWith(".jsonl")) continue;
+          const st = await stat(join(root, f));
+          if (st.mtime < cutoff) {
+            await unlink(join(root, f));
+            removed.push(f.replace(/\.jsonl$/, ""));
+          }
+        }
+      } catch {
+        // No transcripts dir yet — nothing to prune.
+      }
+      return removed;
     },
   };
 }

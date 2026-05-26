@@ -28,6 +28,8 @@ export { createStorage, createScopedStorage } from "./core/storage.js";
 export type { Storage } from "./core/storage.js";
 export { createBus } from "./core/bus.js";
 export type { AppaBus, BusHandler } from "./core/bus.js";
+export { createAuditLog } from "./core/audit.js";
+export type { AuditEntry, AuditLog } from "./core/audit.js";
 export { createTeamReader } from "./core/team.js";
 export type { TeamReader } from "./core/team.js";
 export {

@@ -36,6 +36,14 @@ export interface AppaConfig {
   dailyLimit?: number;
   /** Max tool rounds per user message. Default 3. */
   maxToolRounds?: number;
+  /**
+   * Retention window for transcript files (days). On server boot the
+   * kernel sweeps the transcripts directory and deletes files older
+   * than this. Unset = retain forever. Set in classrooms governed by
+   * FERPA / IT retention schedules / district policy.
+   * /angel finding F38 (Blindspot Important).
+   */
+  transcriptRetentionDays?: number;
   /** Modules to load. */
   modules: AppaModule[];
   /** Extra system prompt appended after tutor-prompt.md and the module fragments. */
@@ -85,6 +93,7 @@ export function resolveConfig(c: AppaConfig): ResolvedConfig {
     hourlyLimit: c.hourlyLimit ?? 20,
     dailyLimit: c.dailyLimit ?? 100,
     maxToolRounds: c.maxToolRounds ?? 3,
+    transcriptRetentionDays: c.transcriptRetentionDays ?? 0,
     modules: c.modules,
     extraSystemPrompt: c.extraSystemPrompt ?? "",
     resolveCaller: c.resolveCaller ?? null,

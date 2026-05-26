@@ -1,5 +1,6 @@
 // pattern: imperative-shell
 import type { Request, Response, Router } from "express";
+import type { AuditLog } from "../core/audit.js";
 import type { ResolvedConfig } from "../core/config.js";
 import type { TeamReader } from "../core/team.js";
 import { type ThreadStore, callerOwnsThread } from "../core/thread.js";
@@ -11,6 +12,7 @@ export interface CoreRoutesDeps {
   team: TeamReader;
   threads: ThreadStore;
   transcripts: TranscriptStore;
+  audit: AuditLog;
   tabs: Array<{
     moduleName: string;
     tab: { id: string; label: string; visibleTo?: Array<"coach" | "member"> };
@@ -18,7 +20,7 @@ export interface CoreRoutesDeps {
 }
 
 export function mountCoreRoutes(router: Router, deps: CoreRoutesDeps): void {
-  const { config, team, threads, transcripts, tabs } = deps;
+  const { config, team, threads, transcripts, audit, tabs } = deps;
 
   // /api/team: roster lookup for authenticated callers. Only id, name, role
   // and groupId exposed — extra fields (email, phone, etc.) stay private.
@@ -102,6 +104,7 @@ export function mountCoreRoutes(router: Router, deps: CoreRoutesDeps): void {
       return;
     }
     await threads.end(id);
+    await audit.append({ by: caller.id, action: "thread.end", target: id });
     res.json({ ended: id });
   });
 
@@ -115,7 +118,61 @@ export function mountCoreRoutes(router: Router, deps: CoreRoutesDeps): void {
       return;
     }
     const muts = await threads.takeMutations(id);
+    await audit.append({
+      by: caller.id,
+      action: "thread.rollback",
+      target: id,
+      details: { count: muts.length },
+    });
     res.json({ rolledBack: muts.length, mutations: muts });
+  });
+
+  // /api/participants/:id/data: GDPR-style export + erasure.
+  // Read: bundles all of a participant's transcripts so a coach can
+  // hand over the record (or a parent can inspect under FERPA).
+  // Delete: removes thread records owned by them + their transcript
+  // files. Coach-only or self-only.
+  router.get("/api/participants/:id/data", async (req, res) => {
+    const caller = await resolveOr403(req, res, { config });
+    if (!caller) return;
+    const id = typeof req.params.id === "string" ? req.params.id : "";
+    if (!caller.isCoach && caller.id !== id) {
+      res.status(403).json({ error: "not your data" });
+      return;
+    }
+    const allThreads = await threads.list();
+    const owned = allThreads.filter((t) => t.ownerId === id);
+    const out: Array<{ threadId: string; entries: unknown[] }> = [];
+    for (const t of owned) {
+      out.push({ threadId: t.id, entries: await transcripts.read(t.id) });
+    }
+    await audit.append({ by: caller.id, action: "participant.export", target: id });
+    res.json({ participantId: id, threads: out });
+  });
+
+  router.delete("/api/participants/:id/data", async (req, res) => {
+    const caller = await resolveOr403(req, res, { config });
+    if (!caller) return;
+    const id = typeof req.params.id === "string" ? req.params.id : "";
+    if (!caller.isCoach && caller.id !== id) {
+      res.status(403).json({ error: "not your data" });
+      return;
+    }
+    const allThreads = await threads.list();
+    const owned = allThreads.filter((t) => t.ownerId === id);
+    let deleted = 0;
+    for (const t of owned) {
+      await transcripts.remove(t.id);
+      await threads.end(t.id);
+      deleted++;
+    }
+    await audit.append({
+      by: caller.id,
+      action: "participant.erase",
+      target: id,
+      details: { threadsDeleted: deleted },
+    });
+    res.json({ participantId: id, threadsDeleted: deleted });
   });
 
   // /api/transcripts: list. Non-coaches see only their own.
