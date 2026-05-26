@@ -189,9 +189,10 @@ async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<
   const claudeId = refreshed.claudeSessionId;
   const resumeFromStart = refreshed.hasMessages;
 
-  // Build system prompt (persona cached at boot; memory + team cached in their stores)
+  // Build system prompt (persona cached at boot; memory + team cached in their stores).
+  // Memory uses the per-participant view so coach notes about A don't leak into B's prompt.
   const persona = deps.persona;
-  const memoryText = await memory.read();
+  const memoryText = await memory.readForParticipant(caller.id);
   const member = await team.findById(caller.id);
   const threadBlock = `[Thread: ${thread.id} (owner: ${refreshed.ownerId}; caller: ${member?.name ?? caller.id} as ${member?.role ?? "member"})]\n`;
   const systemPrompt = [
