@@ -23,9 +23,11 @@ export interface TranscriptStore {
 
 export function createTranscriptStore(projectDir: string, dir = "transcripts"): TranscriptStore {
   const root = join(projectDir, dir);
+  let rootReady: Promise<void> | null = null;
 
-  async function ensureRoot(): Promise<void> {
-    await mkdir(root, { recursive: true });
+  function ensureRoot(): Promise<void> {
+    if (!rootReady) rootReady = mkdir(root, { recursive: true }).then(() => undefined);
+    return rootReady;
   }
 
   function pathFor(name: string): string {

@@ -149,8 +149,12 @@ async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<
       })) {
         if (ev.type === "text" && ev.text) {
           roundText += ev.text;
-          // Stream only the visible portion (drop TOOL_CALL blocks)
-          const visible = stripToolBlocks(ev.text);
+          // Stream only the visible portion. Cheap gate before the regex —
+          // most chunks have no TOOL_CALL marker, so skip the lazy-dotall
+          // scan when we can. (perf F29)
+          const visible = ev.text.includes("|||TOOL_CALL|||")
+            ? stripToolBlocks(ev.text)
+            : ev.text;
           if (visible) sse(res, "text", { text: visible, round });
         } else if (ev.type === "error") {
           sse(res, "error", { error: ev.error ?? "spawn error" });
