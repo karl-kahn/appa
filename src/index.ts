@@ -1,4 +1,4 @@
-// pattern: types-only re-exports + helper
+// pattern: types-only
 // Main package entry — what consumers `import "appa"` for.
 
 export { defineConfig, resolveConfig } from "./core/config.js";

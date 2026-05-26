@@ -1,4 +1,4 @@
-// pattern: imperative-shell (routes) wrapping functional core (validation, id-gen)
+// pattern: imperative-shell
 // Generic kanban task board.
 
 import { z } from "zod";

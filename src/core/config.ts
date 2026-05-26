@@ -1,4 +1,4 @@
-// pattern: types-only + helper
+// pattern: types-only
 import type { AppaModule } from "../modules/types.js";
 
 export interface AppaConfig {

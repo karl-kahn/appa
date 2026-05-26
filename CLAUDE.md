@@ -14,7 +14,12 @@ Appa is the kernel productized out of `kidwind-worlds/server/`. The aim is a tin
 3. **No cross-module imports.** Modules don't know about each other. If two modules need to share state, that's a kernel concern.
 4. **JSON files for persistence.** No database. Each module gets a `storage` namespace and reads/writes JSON. Aim: a project's full state is grep-able and `git add`-able.
 5. **Tests as spec.** Every kernel piece (spawn, session, tools, storage) has a `.test.ts` next to it.
-6. **FCIS markers.** Each source file starts with `// pattern: functional-core` or `// pattern: imperative-shell`. Pure logic stays in core; spawn/io/express stays in shell.
+6. **FCIS markers.** Each source file starts with exactly one of:
+   - `// pattern: functional-core` — pure logic, no IO, no side effects (testable as pure functions)
+   - `// pattern: imperative-shell` — IO, spawn, network, filesystem, Express handlers
+   - `// pattern: types-only` — no runtime export (or only trivial helpers that don't justify a separate label), just type declarations + re-exports
+
+   Pick the dominant pattern for the file. If you can't pick — split the file. Dual or hyphenated labels (`functional-core + imperative-shell (foo)`) are not valid; they're a signal the file needs to be split.
 
 ## Tech stack
 
