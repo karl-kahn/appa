@@ -99,4 +99,16 @@ describe("tasks module", () => {
   it("rejects invalid create params", async () => {
     await expect(invoke("create_task", { title: "" })).rejects.toThrow();
   });
+
+  it("update_task throws on unknown id rather than silently returning null", async () => {
+    await invoke("create_task", { title: "a" });
+    await expect(invoke("update_task", { id: "ghost", column: "done" })).rejects.toThrow(
+      /no task with id/,
+    );
+  });
+
+  it("delete_task throws on unknown id rather than silently no-oping", async () => {
+    await invoke("create_task", { title: "a" });
+    await expect(invoke("delete_task", { id: "ghost" })).rejects.toThrow(/no task with id/);
+  });
 });

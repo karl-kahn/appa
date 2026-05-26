@@ -79,16 +79,35 @@ const mod: AppaModule = {
     },
     update_task: async ({ params, ctx }) => {
       const input = UpdateInput.parse(params);
+      let found = false;
       const list = await ctx.storage.update<Task[]>(KEY, [], (cur) =>
-        cur.map((t) => (t.id === input.id ? ({ ...t, ...stripNulls(input) } as Task) : t)),
+        cur.map((t) => {
+          if (t.id !== input.id) return t;
+          found = true;
+          return { ...t, ...stripNulls(input) } as Task;
+        }),
       );
-      return list.find((t) => t.id === input.id) ?? null;
+      if (!found) {
+        throw new Error(`update_task: no task with id ${JSON.stringify(input.id)}`);
+      }
+      return list.find((t) => t.id === input.id);
     },
     delete_task: async ({ params, ctx }) => {
       const input = DeleteInput.parse(params);
-      const before = await ctx.storage.read<Task[]>(KEY, []);
-      const after = before.filter((t) => t.id !== input.id);
-      await ctx.storage.write(KEY, after);
+      let found = false;
+      const after = await ctx.storage.update<Task[]>(KEY, [], (cur) => {
+        const next = cur.filter((t) => {
+          if (t.id === input.id) {
+            found = true;
+            return false;
+          }
+          return true;
+        });
+        return next;
+      });
+      if (!found) {
+        throw new Error(`delete_task: no task with id ${JSON.stringify(input.id)}`);
+      }
       return { deleted: input.id, remaining: after.length };
     },
   },
@@ -127,11 +146,20 @@ const mod: AppaModule = {
     });
     router.delete("/api/tasks/:id", async (req, res) => {
       const id = typeof req.params.id === "string" ? req.params.id : "";
-      const before = await storage.read<Task[]>(KEY, []);
-      await storage.write(
-        KEY,
-        before.filter((t) => t.id !== id),
+      let found = false;
+      await storage.update<Task[]>(KEY, [], (cur) =>
+        cur.filter((t) => {
+          if (t.id === id) {
+            found = true;
+            return false;
+          }
+          return true;
+        }),
       );
+      if (!found) {
+        res.status(404).json({ error: `no task with id ${id}` });
+        return;
+      }
       res.json({ deleted: id });
     });
   },
