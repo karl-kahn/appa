@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createMemoryStore } from "../../core/memory.js";
-import { createSessionStore, type SessionRecord } from "../../core/session.js";
+import { type SessionRecord, createSessionStore } from "../../core/session.js";
 import { createStorage } from "../../core/storage.js";
 import { createTeamReader } from "../../core/team.js";
 import type { ModuleContext } from "../types.js";

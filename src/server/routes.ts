@@ -1,8 +1,8 @@
 // pattern: imperative-shell
 import type { Request, Response, Router } from "express";
 import type { SessionStore } from "../core/session.js";
-import type { TranscriptStore } from "../core/transcript.js";
 import type { TeamReader } from "../core/team.js";
+import type { TranscriptStore } from "../core/transcript.js";
 
 export interface CoreRoutesDeps {
   team: TeamReader;

@@ -52,6 +52,7 @@ export function buildArgs(options: SpawnOptions): string[] {
     "--output-format",
     "stream-json",
     "--verbose",
+    "--include-partial-messages",
     "--model",
     options.model ?? "sonnet",
     "--setting-sources",
@@ -126,21 +127,60 @@ export async function* spawnClaude(options: SpawnOptions): AsyncGenerator<SpawnE
   }
 }
 
-/** Map raw stream-json events to SpawnEvent. Tolerant of schema drift. */
+/**
+ * Map raw stream-json events to SpawnEvent.
+ *
+ * Two shapes we handle:
+ * - `stream_event` deltas (emitted because of --include-partial-messages):
+ *   incremental `{event:{type:"content_block_delta",delta:{type:"text_delta",text}}}`
+ * - Complete `assistant` messages (one per turn with full content array):
+ *   `{type:"assistant",message:{content:[{type:"text",text}, ...]}}`
+ *
+ * We INTENTIONALLY ignore `tool_use` / `tool_result` blocks. Appa's tool
+ * round-trip is text-embedded (`|||TOOL_CALL|||`) — it works because the
+ * spawned `claude` runs with `--disallowed-tools` covering every native
+ * tool, so the model has nothing to emit as a `tool_use` content block.
+ * If a tool ever sneaks past the disallow list, the `tool_use` will arrive
+ * here and we LOG LOUDLY rather than silently swallow it (the previous
+ * behavior). Audited by /angel 2026-05-25 (RTFM/Test/Future-Me consensus).
+ */
 function mapStreamEvent(raw: unknown): SpawnEvent | null {
   if (typeof raw !== "object" || raw === null) return null;
   const obj = raw as Record<string, unknown>;
   const type = obj.type;
 
-  // assistant text delta
+  // Token-level delta from --include-partial-messages
+  if (type === "stream_event" && typeof obj.event === "object" && obj.event !== null) {
+    const ev = obj.event as { type?: string; delta?: { type?: string; text?: string } };
+    if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta" && ev.delta.text) {
+      return { type: "text", text: ev.delta.text, raw };
+    }
+    return null;
+  }
+
+  // Complete assistant message (one per turn). Includes the full content array;
+  // we extract any text blocks and warn on any non-text content (invariant violation).
   if (type === "assistant" && typeof obj.message === "object" && obj.message !== null) {
-    const msg = obj.message as { content?: Array<{ type?: string; text?: string }> };
-    const text = (msg.content ?? [])
+    const msg = obj.message as {
+      content?: Array<{ type?: string; text?: string; name?: string }>;
+    };
+    const blocks = msg.content ?? [];
+    for (const c of blocks) {
+      if (c.type === "tool_use" || c.type === "tool_result") {
+        console.error(
+          `appa/spawn: unexpected ${c.type} content block (tool name: ${c.name ?? "?"}). ` +
+            "Appa's protocol is text-embedded |||TOOL_CALL|||; native tool_use blocks indicate " +
+            "a tool slipped past the disallow list. This event will not be dispatched.",
+        );
+      }
+    }
+    const text = blocks
       .filter((c) => c.type === "text" && typeof c.text === "string")
       .map((c) => c.text as string)
       .join("");
     if (text) return { type: "text", text, raw };
   }
-  if (type === "result" || type === "system") return null;
+
+  // `result` and `system` events are control-plane noise; ignore.
   return null;
 }

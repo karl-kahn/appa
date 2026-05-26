@@ -2,7 +2,7 @@
 // pattern: imperative-shell
 // `npx create-appa <dir>` — scaffold a new Appa project.
 
-import { copyFile, mkdir, readFile, readdir, writeFile, stat } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 

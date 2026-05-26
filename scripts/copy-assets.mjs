@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Copy non-TS assets (.html, .css, .md) from src/ to dist/ preserving structure.
 
-import { readdir, mkdir, copyFile } from "node:fs/promises";
-import { join, relative, dirname } from "node:path";
+import { copyFile, mkdir, readdir } from "node:fs/promises";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SRC = join(dirname(fileURLToPath(import.meta.url)), "..", "src");

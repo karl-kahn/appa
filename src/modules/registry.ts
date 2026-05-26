@@ -2,8 +2,8 @@
 // Wire modules: build the tool dispatch table, system prompt, and Express router.
 
 import type { Router } from "express";
-import { isAllowed } from "../core/tools.js";
 import type { SessionRecord } from "../core/session.js";
+import { isAllowed } from "../core/tools.js";
 import type { AppaModule, ModuleContext, ToolHandler } from "./types.js";
 
 export interface ModuleRegistry {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildArgs, buildEnv, DEFAULT_DISALLOWED_TOOLS } from "./spawn.js";
+import { DEFAULT_DISALLOWED_TOOLS, buildArgs, buildEnv } from "./spawn.js";
 
 describe("buildArgs", () => {
   it("includes --session-id on first call", () => {
@@ -22,11 +22,12 @@ describe("buildArgs", () => {
     expect(args).not.toContain("--session-id");
   });
 
-  it("requests stream-json + verbose + project settings", () => {
+  it("requests stream-json + verbose + partial-messages + project settings", () => {
     const args = buildArgs({ message: "hi", claudeSessionId: "x" });
     expect(args).toContain("--output-format");
     expect(args).toContain("stream-json");
     expect(args).toContain("--verbose");
+    expect(args).toContain("--include-partial-messages");
     expect(args).toContain("--setting-sources");
     expect(args).toContain("project");
   });

@@ -5,13 +5,13 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Request, Response, Router } from "express";
 import type { ResolvedConfig } from "../core/config.js";
-import { canSpawn, type RateLimitState, recordSpawn } from "../core/rate-limit.js";
-import { newClaudeSessionId, type SessionStore } from "../core/session.js";
-import { spawnClaude } from "../core/spawn.js";
-import type { TranscriptStore } from "../core/transcript.js";
 import type { MemoryStore } from "../core/memory.js";
+import { type RateLimitState, canSpawn, recordSpawn } from "../core/rate-limit.js";
+import { type SessionStore, newClaudeSessionId } from "../core/session.js";
+import { spawnClaude } from "../core/spawn.js";
 import type { TeamReader } from "../core/team.js";
 import { parseToolCalls, stripToolBlocks } from "../core/tools.js";
+import type { TranscriptStore } from "../core/transcript.js";
 import type { ModuleRegistry } from "../modules/registry.js";
 
 export interface ChatDeps {

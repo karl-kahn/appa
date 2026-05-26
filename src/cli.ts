@@ -3,10 +3,10 @@
 // Entry point: load appa.config.{js,mjs} from cwd and start the server.
 
 import { existsSync } from "node:fs";
-import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { config as loadDotenv } from "dotenv";
-import { resolveConfig, type AppaConfig } from "./core/config.js";
+import { type AppaConfig, resolveConfig } from "./core/config.js";
 import { buildApp } from "./server/index.js";
 
 async function main(): Promise<void> {
