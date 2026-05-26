@@ -4,7 +4,13 @@ A web chat tutor + team workspace kernel. Each user in a roster gets their own c
 
 Originally extracted from the [Hardy Hawks KidWind project](https://github.com/karl-kahn/kidwind-appa). This package is the generic kernel; KidWind-specific bits (blade CAD, wind-tunnel test log, donor management, GoFundMe builder) live in `kidwind-appa` as a downstream consumer of `appa`.
 
-> Status: **0.1.0 stub.** Architecture and core spawn loop are in. Module API stabilizing. Not yet on npm.
+> Status: **0.1.0 stub.** Architecture and core spawn loop are in. Module API stabilizing. Not yet on npm — use the "Local install" path below until then.
+
+## Prerequisites
+
+- **Node.js 20+** (`node --version` to check).
+- **Claude Code CLI** on your `$PATH` — `claude --version` should print something. Install: https://docs.claude.com/claude-code/getting-started
+- **Anthropic API key** — get one at https://console.anthropic.com/. Each chat round bills against this key (Sonnet ≈ $3/M input + $15/M output tokens; Haiku ≈ $1/M + $5/M). A classroom session of 25 students × 30 minutes can easily be a few dollars; cap with the kernel's per-caller rate limit or switch to `model: "haiku"` for higher-volume use.
 
 ## Shape it fits
 
@@ -14,17 +20,24 @@ Originally extracted from the [Hardy Hawks KidWind project](https://github.com/k
 - Coach/teacher + student/member role split
 - Local-first storage in JSON files; trivial to back up, diff, version
 
-## Quick start (once published)
+## Local install (while not on npm)
 
 ```bash
-npx create-appa my-classroom
+# 1. clone + build appa
+git clone https://github.com/karl-kahn/appa.git ~/src/appa
+cd ~/src/appa && npm install && npm run build && npm link
+
+# 2. scaffold a project
+node ~/src/appa/dist/scaffold/create.js my-classroom
 cd my-classroom
-cp .env.example .env  # set ANTHROPIC_API_KEY
-npm install
+npm link appa                 # symlink the locally-built package
+cp .env.example .env          # then edit .env to set ANTHROPIC_API_KEY
 npm start
 ```
 
-Open http://127.0.0.1:3848. Pick a user from `team.json`, start chatting. Coaches see admin tabs; students see only their own data.
+Open http://127.0.0.1:3848. The picker UI loads from `/api/bootstrap` (the only unauthenticated endpoint); after picking a user from `team.json`, every subsequent request carries `X-Appa-User`. Coaches see admin tabs; students see only their own data.
+
+**Once published**, the flow becomes the standard `npx create-appa my-classroom && cd my-classroom && npm install && npm start`.
 
 ## Core concept: kernel + modules
 

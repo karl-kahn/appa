@@ -140,7 +140,11 @@ async function send(message) {
     body: JSON.stringify({ message, asUserId: state.currentUserId }),
   });
   if (!res.ok || !res.body) {
-    appendMsg("error", `HTTP ${res.status}`);
+    if (res.status === 403) {
+      appendMsg("error", "Server rejected your identity (HTTP 403). Pick a different member from the dropdown, or check that resolveCaller is configured in appa.config.js.");
+    } else {
+      appendMsg("error", `HTTP ${res.status}`);
+    }
     return;
   }
   const reader = res.body.getReader();
@@ -184,6 +188,9 @@ init().catch((err) => {
   console.error(err);
   document.body.insertAdjacentHTML(
     "afterbegin",
-    `<div style="background:#2d1a1a;color:#ffb3b3;padding:0.6rem 1rem;">Init failed: ${err.message}</div>`,
+    `<div style="background:#2d1a1a;color:#ffb3b3;padding:0.6rem 1rem;">
+      Couldn't load Appa: ${err.message}.<br/>
+      Check that the server is running (<code>npm start</code>) and refresh.
+     </div>`,
   );
 });

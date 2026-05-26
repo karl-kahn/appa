@@ -2,6 +2,11 @@ node_modules/
 .env
 .env.local
 *.log
+# .sessions.json was the pre-2026-05-26 layout; .threads.json is current.
 .sessions.json
+.threads.json
+# Transcripts are ignored by default for student-privacy reasons.
+# If you want git-tracked backups, remove the next line — but think
+# carefully about who has read access to the resulting repo.
 transcripts/
 photos/

@@ -2,6 +2,7 @@
 // pattern: imperative-shell
 // Entry point: load appa.config.{js,mjs} from cwd and start the server.
 
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -11,6 +12,21 @@ import { buildApp } from "./server/index.js";
 
 async function main(): Promise<void> {
   loadDotenv();
+
+  // Probe for the Claude CLI before booting. The chat hot path
+  // spawns `claude -p`; without it the server starts but every
+  // chat round fails opaquely. Better to refuse to start with a
+  // clear error. /angel finding F33 (User Important).
+  const probe = spawnSync("claude", ["--version"], { stdio: "ignore" });
+  if (probe.status !== 0) {
+    console.error(
+      "appa: `claude` CLI not found on PATH (or `claude --version` exited non-zero).",
+    );
+    console.error(
+      "      Install from https://docs.claude.com/claude-code/getting-started and try again.",
+    );
+    process.exit(1);
+  }
 
   const configPath = findConfig();
   if (!configPath) {

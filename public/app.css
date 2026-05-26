@@ -1,11 +1,28 @@
 :root {
-  color-scheme: dark;
+  color-scheme: light dark;
   --bg: #0f1115;
   --panel: #161a21;
   --border: #262b35;
   --text: #e6e9ef;
-  --muted: #8a93a3;
+  --muted: #b0b8c6; /* lifted from 0.7 opacity to a value that hits WCAG AA on the panel bg */
   --accent: #6aa3ff;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #fafbfc;
+    --panel: #ffffff;
+    --border: #d8dde4;
+    --text: #121620;
+    --muted: #545c6b;
+    --accent: #1f5fcc;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }
 * { box-sizing: border-box; }
 body {

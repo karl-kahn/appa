@@ -2,24 +2,35 @@
 
 An Appa instance. Generic chat-with-tutor-plus-team-workspace, customized for this project.
 
+## Prerequisites
+
+- **Node.js 20+** (`node --version` to check)
+- **Claude Code CLI** on your `$PATH` (`claude --version` should print something — install from https://docs.claude.com/claude-code/getting-started)
+- **Anthropic API key** from https://console.anthropic.com/ — each chat round costs real money against this key. A class of 25 × full day can run a few dollars; switch to `model: "haiku"` in `appa.config.js` for high-volume use.
+
 ## Run
 
 ```bash
-cp .env.example .env  # set ANTHROPIC_API_KEY
+cp .env.example .env  # then edit and set ANTHROPIC_API_KEY
 npm install
 npm start
 ```
 
-Then open <http://127.0.0.1:3848>.
+Then open <http://127.0.0.1:3848>. Pick a member from the dropdown, start chatting.
+
+> **⚠️ Auth warning.** The dev-mode picker uses `devAuth()`, which trusts whatever id the client claims. Anyone who can reach this URL can act as any member — including the coach. Do not expose this server to the open internet without putting a real auth layer in front of it (Tailscale Funnel device-auth, a reverse proxy with SSO, signed cookies, etc.). See the `resolveCaller` field in `appa.config.js`.
 
 ## Files
 
-- `appa.config.js` — which modules to load and runtime settings
-- `team.json` — your roster (coaches + members)
-- `tutor-prompt.md` — the tutor persona (edit this to fit your domain)
-- `shared-memory.md` — knowledge the tutor sees in every session
+- `appa.config.js` — which modules to load and runtime settings; **also where you wire real auth**
+- `team.json` — your roster (coaches + members; `groupId` for class sections)
+- `tutor-prompt.md` — the tutor persona. The opening line is the LLM's mission — replace it with your project's specific goal in one sentence
+- `shared-memory.md` — knowledge the tutor sees in every session. Grows automatically as sessions end and the kernel summarizes; seed it by hand with project context (hard facts, vocabulary, decisions). **Editing this file affects every user's tutor**, so coach-only context here will be visible to students
+- `.env.example` — copy to `.env` and fill in the API key
 
-Data files are created lazily as modules are used (`tasks.json`, `photos.json`, `transcripts/`, etc.).
+Data files are created lazily as modules are used (`tasks.json`, `photos.json`, `transcripts/`, `.threads.json`, etc.).
+
+`transcripts/` is gitignored by default for student-privacy reasons. If you want git-based backup of chat history, remove that line from `.gitignore` — but then be careful about who can read the repo.
 
 ## Adding a module
 
