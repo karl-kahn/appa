@@ -6,6 +6,7 @@
     "templates/**",
     "public/**",
     "scripts/**",
+    "**/__fixtures__/**",
     "**/*.test.ts"
   ],
   "rules": {

@@ -22,6 +22,13 @@ export interface SpawnOptions {
   signal?: AbortSignal;
   /** Optional override for the executable path (mainly for tests). */
   claudeBinary?: string;
+  /**
+   * Extra environment variables to expose to the spawned child, on
+   * top of the whitelist in `buildEnv`. Use for proxy / CA-bundle /
+   * test-scenario vars the kernel doesn't know about. Treat as
+   * trust-extending: never forward caller-supplied env keys here.
+   */
+  extraEnv?: NodeJS.ProcessEnv;
 }
 
 export const DEFAULT_DISALLOWED_TOOLS = [
@@ -89,13 +96,18 @@ export function buildArgs(options: SpawnOptions): string[] {
 export async function* spawnClaude(options: SpawnOptions): AsyncGenerator<SpawnEvent> {
   const bin = options.claudeBinary ?? "claude";
   const args = buildArgs(options);
-  const env = buildEnv();
+  const env = { ...buildEnv(), ...(options.extraEnv ?? {}) };
 
   const child: ChildProcessWithoutNullStreams = nodeSpawn(bin, args, {
     env,
     stdio: ["pipe", "pipe", "pipe"],
     signal: options.signal,
   });
+
+  // When AbortSignal fires, Node emits 'error' on the child (AbortError).
+  // We surface that via the close handler + the catch below; absorb the
+  // 'error' event so Node doesn't treat it as unhandled.
+  child.on("error", () => {});
 
   child.stdin.write(options.message);
   child.stdin.end();

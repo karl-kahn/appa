@@ -221,13 +221,16 @@ async function handleChat(req: Request, res: Response, deps: ChatDeps): Promise<
     let roundText = "";
 
     try {
-      for await (const ev of spawnClaude({
+      const spawnOpts: Parameters<typeof spawnClaude>[0] = {
         message: nextInput,
         systemPromptAppend: round === 1 ? systemPrompt : "",
         claudeSessionId: claudeId,
         resume: resumeFromStart || round > 1,
         model: config.model,
-      })) {
+      };
+      if (config.claudeBinary) spawnOpts.claudeBinary = config.claudeBinary;
+      if (config.extraSpawnEnv) spawnOpts.extraEnv = config.extraSpawnEnv;
+      for await (const ev of spawnClaude(spawnOpts)) {
         if (ev.type === "text" && ev.text) {
           roundText += ev.text;
           const visible = ev.text.includes("|||TOOL_CALL|||") ? stripToolBlocks(ev.text) : ev.text;

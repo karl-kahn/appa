@@ -46,6 +46,18 @@ export interface AppaConfig {
   transcriptRetentionDays?: number;
   /** Modules to load. */
   modules: AppaModule[];
+  /**
+   * Override the path to the spawned binary. Defaults to "claude" (PATH
+   * lookup). Useful for tests, sandboxes, or pinning a specific install
+   * location. Don't accept this from caller-controlled input.
+   */
+  claudeBinary?: string;
+  /**
+   * Extra environment to forward to the spawned binary, merged on top of
+   * the kernel's whitelist. Treat as trust-extending. Most deployments
+   * leave this empty; tests use it to drive a mock CLI.
+   */
+  extraSpawnEnv?: NodeJS.ProcessEnv;
   /** Extra system prompt appended after tutor-prompt.md and the module fragments. */
   extraSystemPrompt?: string;
   /**
@@ -75,10 +87,21 @@ export function defineConfig<T extends AppaConfig>(c: T): T {
 }
 
 export interface ResolvedConfig
-  extends Required<Omit<AppaConfig, "extraSystemPrompt" | "resolveCaller" | "onTranscriptAppend">> {
+  extends Required<
+    Omit<
+      AppaConfig,
+      | "extraSystemPrompt"
+      | "resolveCaller"
+      | "onTranscriptAppend"
+      | "claudeBinary"
+      | "extraSpawnEnv"
+    >
+  > {
   extraSystemPrompt: string;
   resolveCaller: ResolveCaller | null;
   onTranscriptAppend: OnTranscriptAppend | null;
+  claudeBinary: string | null;
+  extraSpawnEnv: NodeJS.ProcessEnv | null;
 }
 
 export function resolveConfig(c: AppaConfig): ResolvedConfig {
@@ -98,5 +121,7 @@ export function resolveConfig(c: AppaConfig): ResolvedConfig {
     extraSystemPrompt: c.extraSystemPrompt ?? "",
     resolveCaller: c.resolveCaller ?? null,
     onTranscriptAppend: c.onTranscriptAppend ?? null,
+    claudeBinary: c.claudeBinary ?? null,
+    extraSpawnEnv: c.extraSpawnEnv ?? null,
   };
 }
